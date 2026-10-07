@@ -2,7 +2,7 @@
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h } from '../ui.js';
+import { h, fill, topbar } from '../ui.js';
 
 export async function renderRestorePage(ctx) {
   const c = await store.counts();
@@ -13,7 +13,7 @@ export async function renderRestorePage(ctx) {
   const out = h('div', { role: 'status' });
   const fileIn = h('input', { type: 'file', accept: '.html,text/html', class: 'file', 'aria-label': '選擇備份檔' });
   const page = h('div', { class: 'page' },
-    h('h1', null, '從備份找回'),
+    topbar('從備份找回', back, hasData ? '回設定' : '回上一頁'),
     h('ol', { class: 'steps' },
       h('li', null, '找到之前匯出的備份檔（檔名像「收租紀錄_2026-10-07.html」）。它可能在「檔案」App、iCloud 雲碟，或你存放的任何地方。'),
       h('li', null, '按下面的「選擇檔案」，找到那個檔，選它。')),
@@ -24,10 +24,10 @@ export async function renderRestorePage(ctx) {
   fileIn.addEventListener('change', async () => {
     const f = fileIn.files[0];
     if (!f) return;
-    out.replaceChildren(h('p', { class: 'muted' }, '讀取中…'));
+    fill(out, h('p', { class: 'muted' }, '讀取中…'));
     let r;
-    try { r = await backup.readBackupFile(f); } catch (e) { out.replaceChildren(h('p', { class: 'bad' }, '✘ ' + e.message)); return; }
-    if (!r.ok) { out.replaceChildren(h('p', { class: 'bad' }, '✘ 這個備份檔不完整（內容和當初存的時候不一樣），請改用另一份。')); return; }
+    try { r = await backup.readBackupFile(f); } catch (e) { fill(out, h('p', { class: 'bad' }, '✘ ' + e.message)); return; }
+    if (!r.ok) { fill(out, h('p', { class: 'bad' }, '✘ 這個備份檔不完整（內容和當初存的時候不一樣），請改用另一份。')); return; }
     const sm = r.summary;
     const when = new Date(sm.exportedAt).toLocaleString('zh-TW', { hour12: false });
     const info = h('p', { class: 'ok' }, `✔ 備份檔完整：${when} 的備份，${sm.tenants} 位租客、${sm.months} 個月、${sm.payments} 筆紀錄、${sm.photos} 張照片。`);
@@ -56,11 +56,11 @@ export async function renderRestorePage(ctx) {
       go.disabled = true; go.textContent = '找回中…';
       const same = await backup.restore(r.payload);
       await ctx.applyFont();
-      out.replaceChildren(
+      fill(out, 
         h('p', { class: same ? 'big st-text-paid' : 'bad' }, same ? '✔ 找回完成，內容與備份完全相同。' : '✘ 找回後的內容與備份不一樣，請聯絡開發者。'),
         h('a', { class: 'btn', href: '#/' }, '回到收租表'));
     });
-    out.replaceChildren(info,
+    fill(out, info,
       hasData ? h('div', { class: 'warnbox' }, h('p', null, '這支手機上已經有資料，找回會整個換掉。'), savePrev, prevStatus) : null,
       typed, go);
   });

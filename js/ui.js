@@ -1,4 +1,26 @@
-// 小工具：建立元素、按住 N 秒的按鈕、狀態文字。
+// 小工具：建立元素、把子元素放進去、頁首標題列、按住 N 秒的按鈕、狀態文字。
+//
+// 2026-10-07 實機發現畫面上出現「null」「nullnull」：h() 會略過 null，但瀏覽器原生的 append()／replaceChildren()
+// 不會——它們把 null 轉成文字「null」。畫面程式裡「有就顯示、沒有就 null」的寫法很多，直接交給原生方法就會漏。
+// 所以：畫面程式一律用這裡的 add()／fill()（和 h() 用同一個 nodes()），不直接呼叫原生 append／prepend／replaceChildren。
+// scripts/staticcheck.mjs 會擋直接呼叫；端對端測試會擋畫面上出現 null／undefined／NaN。
+
+/** 子元素清單 → 真正要放進去的節點：攤平、略過 null／undefined／false、其他值轉成文字 */
+export function nodes(kids) {
+  const out = [];
+  for (const c of kids.flat(Infinity)) {
+    if (c == null || c === false) continue;
+    out.push(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return out;
+}
+/** 在 el 後面加子元素（略過 null） */
+export function add(el, ...kids) { for (const n of nodes(kids)) el.appendChild(n); return el; }
+/** 把 el 的內容換成這些子元素（略過 null） */
+export function fill(el, ...kids) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+  return add(el, ...kids);
+}
 
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -11,11 +33,18 @@ export function h(tag, attrs, ...children) {
     else if (v === true) el.setAttribute(k, '');
     else el.setAttribute(k, v);
   }
-  for (const c of children.flat(Infinity)) {
-    if (c == null || c === false) continue;
-    el.append(c.nodeType ? c : String(c));
-  }
-  return el;
+  return add(el, ...children);
+}
+
+/**
+ * 每一頁最上面的標題列：左邊是夠大的返回鍵（寫字，不只用箭頭——長輩不一定看得懂圖示），中間是頁面名稱。
+ * back 不給就只有標題（例如安裝說明頁）。
+ */
+export function topbar(title, back, backLabel = '回收租表') {
+  return h('header', { class: 'topbar' },
+    back ? h('a', { class: 'backbtn', href: back, 'data-act': 'back' }, h('span', { class: 'backarrow', 'aria-hidden': 'true' }, '‹'), backLabel) : h('span', { class: 'backspace' }),
+    h('h1', { class: 'topbar-title' }, title),
+    h('span', { class: 'backspace' }));
 }
 
 export const STATUS = {
@@ -36,9 +65,9 @@ export function statusLine(status, payment) {
  * 只點一下：呼叫 onShort（顯示說明），不進去。
  */
 export function holdButton(label, ms, onDone, onShort) {
-  const fill = h('span', { class: 'hold-fill', 'aria-hidden': 'true' });
+  const fillEl = h('span', { class: 'hold-fill', 'aria-hidden': 'true' });
   const text = h('span', { class: 'hold-label' }, label);
-  const btn = h('button', { type: 'button', class: 'hold' }, fill, text);
+  const btn = h('button', { type: 'button', class: 'hold' }, fillEl, text);
   let timer = null, start = 0, raf = 0;
   const reset = () => {
     clearTimeout(timer); timer = null; cancelAnimationFrame(raf);
@@ -70,7 +99,7 @@ export function holdButton(label, ms, onDone, onShort) {
 /** 畫面底部短暫顯示一行字（給設定頁用；主要流程不依賴它） */
 export function toast(msg, ms = 2500) {
   const t = h('div', { class: 'toast', role: 'status' }, msg);
-  document.body.append(t);
+  add(document.body, t);
   setTimeout(() => t.remove(), ms);
 }
 

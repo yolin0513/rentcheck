@@ -5,6 +5,7 @@
 
 import * as db from './db.js';
 import * as store from './store.js';
+import { add } from './ui.js';
 import { buildPayload, renderBackupHtml, extractPayload, verifyPayload, contentHash, backupFileName, b64ToBytes } from './backupcore.js';
 
 export const PHOTO_WINDOW_MONTHS = 24;   // 每份備份帶最近 24 個月的照片（更舊的靠年度照片檔，尚未實作）
@@ -57,7 +58,7 @@ export async function share(prepared) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(f);
   a.download = f.name;
-  document.body.append(a);
+  add(document.body, a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);

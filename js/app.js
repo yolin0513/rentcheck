@@ -12,6 +12,7 @@ import { renderBackupPage, renderDonePrompt } from './views/backupview.js';
 import { renderRestorePage } from './views/restore.js';
 import { renderSettings, renderTenantForm } from './views/settings.js';
 import { renderInstall } from './views/install.js';
+import { h, fill } from './ui.js';
 
 const EDIT_IDLE_MS = 3 * 60 * 1000;
 const PREVIEW_KEY = 'rentcheck-preview';
@@ -93,25 +94,18 @@ export async function render() {
     }
   } catch (e) {
     console.error(e);
-    view = document.createElement('div');
-    view.className = 'page';
-    view.innerHTML = '<h1>出了點問題</h1><p class="muted"></p><p><a class="btn" href="#/">回到收租表</a></p>';
-    view.querySelector('.muted').textContent = String(e && e.message || e);
+    view = h('div', { class: 'page' }, h('h1', null, '出了點問題'), h('p', { class: 'muted' }, String((e && e.message) || e)), h('a', { class: 'btn', href: '#/' }, '回到收租表'));
   }
   if (seq !== renderSeq) return; // 有更新的一次 render 在跑，這一次作廢
   document.body.classList.toggle('editing', state.edit && hash.startsWith('#/settings'));
   const root = app();
-  root.replaceChildren(view);
-  if (state.preview && !state.standalone) root.prepend(previewBanner());
+  fill(root, state.preview && !state.standalone ? previewBanner() : null, view);
   window.scrollTo(0, 0);
   document.body.dataset.rendered = String(Number(document.body.dataset.rendered || 0) + 1); // 給自動測試等「畫完了」
 }
 
 function previewBanner() {
-  const d = document.createElement('div');
-  d.className = 'preview-banner';
-  d.textContent = '預覽模式（瀏覽器分頁）：這裡的資料可能被 iPhone 清掉。正式使用請從主畫面的圖示打開。';
-  return d;
+  return h('div', { class: 'preview-banner' }, '預覽模式（瀏覽器分頁）：這裡的資料可能被 iPhone 清掉。正式使用請從主畫面的圖示打開。');
 }
 
 // ---------- 啟動 ----------

@@ -1,6 +1,6 @@
 {
   "name": "rentcheck",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "收租紀錄 — 給長輩用的收租確認 PWA：大字、一屏看完 10 戶、按錯可改回、用 LINE 傳備份。資料只在手機裡，備份檔是正本。",
   "type": "module",
   "private": true,

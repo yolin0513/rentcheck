@@ -1,7 +1,7 @@
 // 主畫面：一個月 × 所有租客，2 欄 × 5 列的房間格。位置固定、照門牌排，不依狀態移動。
 
 import * as store from '../store.js';
-import { h, holdButton, statusLine, STATUS, toast } from '../ui.js';
+import { h, add, holdButton, statusLine, STATUS, toast } from '../ui.js';
 import { ymOf, isoDate, addMonths, monthName, yearOf, isActive, cellStatus, shortDate } from '../months.js';
 
 export const REMIND_DAYS = 30;        // 距上次傳出超過幾天，就在格子上方提醒
@@ -23,6 +23,7 @@ export function buildTiles(cells, ym) {
   return h('div', { class: 'grid', role: 'list' }, cells.map(({ t, p, status }) =>
     h('a', { class: `tile ${STATUS[status].cls}`, href: `#/t/${encodeURIComponent(t.id)}/${ym}`, role: 'listitem', dataset: { status, tenant: t.id } },
       h('span', { class: 'tile-label' }, t.label),
+      t.name ? h('span', { class: 'tile-name' }, t.name) : null,   // 2026-10-07 Yolin：門牌下面加稱呼
       h('span', { class: 'tile-status' }, statusLine(status, p)))));
 }
 
@@ -63,13 +64,11 @@ export async function renderGrid(ctx) {
   if (!all.length) return emptyState(ctx);
 
   const page = h('div', { class: 'page grid-page' });
-  page.append(buildHeader(ym, cells));
-
-  if (needsReminder(s)) page.append(buildReminder(s));
-
-  page.append(cells.length ? buildTiles(cells, ym) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'));
-
-  page.append(h('footer', { class: 'grid-foot' },
+  add(page,
+    buildHeader(ym, cells),
+    needsReminder(s) ? buildReminder(s) : null,
+    cells.length ? buildTiles(cells, ym) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'),
+    h('footer', { class: 'grid-foot' },
     h('p', { class: 'muted center' }, s.lastBackupAt ? `上次匯出備份：${shortDate(isoDate(new Date(s.lastBackupAt)))}` : '還沒有匯出過備份'),
     h('a', { class: 'btn secondary small', href: '#/backup' }, '匯出備份'),
     holdButton('設定（按住 3 秒）', 3000, () => ctx.enterEdit(), () => toast('要按住 3 秒才會打開設定'))));
@@ -79,9 +78,10 @@ export async function renderGrid(ctx) {
 function emptyState(ctx) {
   // 沒有任何資料：可能是第一次用，也可能是被 iPhone 清掉了。App 分不出來，所以兩條路都給。
   return h('div', { class: 'page empty' },
-    h('h1', null, '收租紀錄'),
-    h('p', { class: 'lead' }, '這裡還沒有紀錄。'),
-    h('p', { class: 'lead' }, '如果以前用過、紀錄卻不見了，可以用之前匯出的備份檔找回來。'),
+    h('header', { class: 'topbar' }, h('span', { class: 'backspace' }), h('h1', { class: 'topbar-title' }, '收租紀錄'), h('span', { class: 'backspace' })),
+    h('section', { class: 'card' },
+      h('p', { class: 'lead' }, '這裡還沒有紀錄。'),
+      h('p', { class: 'lead' }, '如果以前用過、紀錄卻不見了，可以用之前匯出的備份檔找回來。')),
     h('a', { class: 'btn', href: '#/restore' }, '從備份找回'),
     h('button', { type: 'button', class: 'btn secondary', onclick: () => ctx.enterEdit() }, '第一次使用：開始設定'));
 }

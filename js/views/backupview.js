@@ -7,7 +7,7 @@
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h, fmtMB } from '../ui.js';
+import { h, fill, topbar, fmtMB } from '../ui.js';
 import { monthName } from '../months.js';
 import { SNOOZE_DAYS } from './grid.js';
 
@@ -29,7 +29,7 @@ export async function renderBackupPage(ctx, { after = '#/' } = {}) {
   const show = (kind, ...kids) => {
     result.dataset.result = kind;
     result.className = `result ${kind === 'shared' || kind === 'downloaded' ? 'result-ok' : 'result-bad'}`;
-    result.replaceChildren(...kids);
+    fill(result, kids);
   };
 
   btn.addEventListener('click', async () => {
@@ -59,7 +59,7 @@ export async function renderBackupPage(ctx, { after = '#/' } = {}) {
   });
 
   return h('div', { class: 'page' },
-    h('h1', null, '匯出備份'),
+    topbar('匯出備份', after),
     h('p', { class: 'lead' }, '按「匯出備份」會出現 iPhone 的分享畫面。選一個地方把檔案存起來，例如「儲存到檔案」。'),
     btn, status, result,
     fromRemind
@@ -75,8 +75,9 @@ export async function renderBackupPage(ctx, { after = '#/' } = {}) {
 export async function renderDonePrompt(ctx, ym) {
   const s = await store.settings();
   await store.setMeta('completePrompted', { ...(s.completePrompted || {}), [ym]: new Date().toISOString() });
-  return h('div', { class: 'page center-page' },
-    h('p', { class: 'big st-text-paid' }, `${monthName(ym)}收齊了！`),
+  return h('div', { class: 'page' },
+    topbar('收齊了', `#/m/${ym}`),
+    h('section', { class: 'card center' }, h('p', { class: 'big st-text-paid' }, `${monthName(ym)}收齊了！`)),
     h('p', { class: 'lead' }, '要不要匯出一份備份？'),
     h('a', { class: 'btn primary', href: '#/backup' }, '匯出備份'),
     h('a', { class: 'btn secondary', href: `#/m/${ym}` }, '先不要'));

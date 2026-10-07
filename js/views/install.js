@@ -2,11 +2,11 @@
 // 理由：iPhone 的瀏覽器分頁和主畫面 App 是兩個分開的儲存區；分頁還會套「7 天沒用就清掉」的規則。
 // 判斷只用 display-mode，不看瀏覽器識別字串。
 
-import { h } from '../ui.js';
+import { h, topbar } from '../ui.js';
 
 export function renderInstall(ctx, { onPreview }) {
   return h('div', { class: 'page install' },
-    h('h1', null, '收租紀錄'),
+    topbar('收租紀錄'),
     h('p', { class: 'lead' }, '請先把這一頁加到主畫面，之後都從主畫面的圖示打開。'),
     h('ol', { class: 'steps' },
       h('li', null, '如果是在其他 App 裡點連結打開的：按「⋯」或分享鈕，選「用 Safari 開啟」。'),

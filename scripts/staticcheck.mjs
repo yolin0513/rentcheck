@@ -43,6 +43,38 @@ const badWords = appFiles.flatMap((f) => {
 });
 ok('畫面文字沒有「晚輩」「家人」', badWords.length === 0, badWords.join('; '));
 
+// ---- 2b. 畫面程式不直接呼叫原生的 append／prepend／replaceChildren／innerHTML ----
+// 2026-10-07 實機出現「null」「nullnull」：原生方法會把 null 轉成文字。一律用 ui.js 的 add()／fill()（會略過 null）。
+const NATIVE = /\.(append|prepend|replaceChildren)\(|\.innerHTML\s*=/;
+ok('對照組：檢查器抓得到 page.append(…)', NATIVE.test("page.append(h('p'), null);") && NATIVE.test("el.innerHTML = '<b>x</b>';"));
+ok('對照組：add(page, …) 不命中', !NATIVE.test("add(page, h('p'), null);"));
+const nativeHits = appFiles.filter((f) => !f.endsWith(path.join('js', 'ui.js'))).flatMap((f) => {
+  const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/<!--[\s\S]*?-->/g, '');
+  return code.split('\n').map((l, i) => (NATIVE.test(l) ? `${path.relative(ROOT, f)}:${i + 1}` : null)).filter(Boolean);
+});
+ok('畫面程式沒有直接呼叫原生 append／prepend／replaceChildren／innerHTML（ui.js 以外）', nativeHits.length === 0, nativeHits.join(', '));
+
+// ---- 2c. 文字與底色的對比 ≥ 7：1（WCAG AAA）——變好看不能變難讀 ----
+const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8');
+const vars = Object.fromEntries([...css.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
+const lum = (hex) => {
+  const c = hex.slice(1).match(/../g).map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+ok('對照組：對比檢查抓得到 #777777 對白底（約 4.5：1）', ratio('#777777', '#ffffff') < 7);
+const PAIRS = [
+  ['fg', 'bg'], ['fg', 'surface'], ['muted', 'surface'], ['muted', 'bg'], ['brand-ink', 'surface'], ['brand-fg', 'brand'],
+  ['paid-fg', 'paid-bg'], ['note-fg', 'note-bg'], ['due-fg', 'due-bg'], ['not-fg', 'not-bg'],
+  ['fg', 'paid-bg'], ['fg', 'note-bg'], ['fg', 'due-bg'], ['fg', 'not-bg'],
+  ['bad', 'bad-bg'], ['bad', 'surface'], ['ok', 'surface'], ['warn-fg', 'warn-bg'],
+];
+const low = PAIRS.filter(([a, b]) => !vars[a] || !vars[b] || ratio(vars[a], vars[b]) < 7).map(([a, b]) => `${a}/${b}${vars[a] && vars[b] ? ' ' + ratio(vars[a], vars[b]).toFixed(1) : '（變數不存在）'}`);
+const minPair = PAIRS.filter(([a, b]) => vars[a] && vars[b]).map(([a, b]) => ratio(vars[a], vars[b])).sort((x, y) => x - y)[0];
+ok(`文字與底色的對比都 ≥ 7：1（${PAIRS.length} 組，最低 ${minPair ? minPair.toFixed(1) : '—'}：1）`, low.length === 0, low.join('; '));
+// 白字放在深色底上的兩處（設定頁首、預覽警告條）
+ok('白字對設定頁首、預覽警告條 ≥ 7：1', ratio('#ffffff', vars.edit) >= 7 && ratio('#ffffff', vars.bad) >= 7, `${ratio('#ffffff', vars.edit).toFixed(1)} / ${ratio('#ffffff', vars.bad).toFixed(1)}`);
+
 // ---- 3. Service Worker 預快取清單與版本 ----
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const listed = new Set([...sw.matchAll(/'\.\/([^']*)'/g)].map((m) => m[1]).filter(Boolean));

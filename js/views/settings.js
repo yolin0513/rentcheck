@@ -3,7 +3,7 @@
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h, fmtMB, daysAgo, toast } from '../ui.js';
+import { h, add, fill, fmtMB, daysAgo, toast } from '../ui.js';
 import { ymOf, addMonths, autoLabels } from '../months.js';
 import { loadMonth, buildHeader, buildTiles, buildReminder } from './grid.js';
 import { tryPersist } from './tenant.js';
@@ -25,7 +25,7 @@ export async function measureFit() {
   const { cells, s } = await loadMonth(ym);
   const once = (withRemind) => {
     const host = h('div', { class: 'measure-host page grid-page', 'aria-hidden': 'true' }, buildHeader(ym, cells), withRemind ? buildReminder(s) : null, buildTiles(cells, ym));
-    document.body.append(host);
+    add(document.body, host);
     const tiles = [...host.querySelectorAll('.tile')];
     const top = host.getBoundingClientRect().top;
     const bottom = tiles.length ? tiles[tiles.length - 1].getBoundingClientRect().bottom - top : 0;
@@ -56,7 +56,7 @@ export async function renderSettings(ctx) {
   const lossText = !s.lastBackupAt
     ? (c.tenants ? '全部的紀錄（還沒有匯出過）' : '沒有東西會損失')
     : s.unsent > 0 ? `上次匯出（${ago} 天前）之後的 ${s.unsent} 筆變更` : '不會損失（上次匯出之後沒有改過）';
-  page.append(section('資料安全',
+  add(page, section('資料安全',
     h('p', { class: 'muted' }, '紀錄只存在這支 iPhone 的 App 裡，而且被清掉時不會有任何提示。所以 App 裡這份只是「副本」；正本是最近一次匯出、存在 App 以外（例如「檔案」或 iCloud）的備份檔。'),
     row('如果現在被清掉，會損失', lossText, s.unsent > 0 || !s.lastBackupAt ? 'warn' : 'ok'),
     row('上次匯出備份', s.lastBackupAt ? `${new Date(s.lastBackupAt).toLocaleString('zh-TW', { hour12: false })}（${ago} 天前，${fmtMB(s.lastBackupBytes)}${s.lastBackupHow === 'restored' ? '，從備份找回' : ''}）` : '還沒有'),
@@ -79,7 +79,7 @@ export async function renderSettings(ctx) {
 
   // ---- 2. 租客 ----
   const cur = ymOf();
-  page.append(section('租客',
+  add(page, section('租客',
     list.length ? h('ol', { class: 'tenant-list' }, list.map((t, i) => h('li', { class: t.endMonth && t.endMonth < cur ? 'moved' : '' },
       h('a', { href: `#/settings/tenant/${encodeURIComponent(t.id)}`, class: 'tl-main' },
         h('b', null, t.label), ` ${t.name || ''}　${Number(t.rent).toLocaleString('en-US')} 元／每月 ${t.dueDay} 號`,
@@ -99,14 +99,14 @@ export async function renderSettings(ctx) {
     await ctx.applyFont(k);
     ctx.render();
   } }, label));
-  page.append(section('字的大小',
+  add(page, section('字的大小',
     s.needFontCheck ? h('p', { class: 'warnbox' }, '換了手機（或螢幕尺寸變了），請重新確認字的大小。') : null,
     h('div', { class: 'font-row' }, fontBtns),
     fitBox,
     h('p', { class: 'muted' }, '請讓長輩看著收租表選看得清楚的大小。放不下時 App 不會自己縮字，最下面幾格要往下捲。')));
   if (list.length) {
     measureFit().then((f) => {
-      fitBox.replaceChildren(
+      fill(fitBox, 
         h('p', { class: f.fits ? 'ok' : 'bad' }, f.fits ? `✔ 平常：一屏放得下這個月全部 ${f.count} 戶` : `✘ 平常：一屏放不下全部 ${f.count} 戶，最下面要往下捲（差 ${f.bottom - f.avail} 點）`),
         f.fits ? h('p', { class: f.fitsWithRemind ? 'ok' : 'muted' }, f.fitsWithRemind ? '✔ 出現「傳紀錄」提醒時也放得下' : `出現「傳紀錄」提醒的那幾天，最下面一列要捲一點（差 ${f.overWithRemind} 點）`) : null,
         f.tooLong.length ? h('p', { class: 'bad' }, `這些格子名稱太長（超過兩行），建議改短：${f.tooLong.join('、')}`) : null);
@@ -117,7 +117,7 @@ export async function renderSettings(ctx) {
   // ---- 4. 其他 ----
   const notes = h('textarea', { class: 'field', rows: '3', 'aria-label': '還沒收的原因選項' });
   notes.value = s.noteOptions.join('\n');
-  page.append(section('還沒收的原因',
+  add(page, section('還沒收的原因',
     h('label', null, '「還沒收的原因」選項（一行一個）', notes),
     h('button', { type: 'button', class: 'btn secondary', onclick: async () => {
       await store.setMeta('noteOptions', notes.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 8));
@@ -126,11 +126,11 @@ export async function renderSettings(ctx) {
 
   // ---- 5. 異動紀錄 ----
   const log = await store.recentLog(30);
-  page.append(section('異動紀錄（最近 30 筆）',
+  add(page, section('異動紀錄（最近 30 筆）',
     log.length ? h('ul', { class: 'log' }, log.map((e) => h('li', null, h('span', { class: 'muted' }, new Date(e.at).toLocaleString('zh-TW', { hour12: false }) + '　'), e.text))) : h('p', { class: 'muted' }, '還沒有。'),
     h('p', { class: 'muted' }, `版本 ${ctx.version}`)));
 
-  page.append(h('button', { type: 'button', class: 'btn', onclick: () => ctx.exitEdit() }, '離開設定'));
+  add(page, h('button', { type: 'button', class: 'btn', onclick: () => ctx.exitEdit() }, '離開設定'));
   return page;
 }
 
@@ -183,7 +183,7 @@ export async function renderTenantForm(ctx, id) {
 
   if (!isNew) {
     const cur = ymOf();
-    page.append(section('搬走／搬回',
+    add(page, section('搬走／搬回',
       t.endMonth
         ? h('div', null, h('p', null, `${t.endMonth} 之後不再出現在收租表。舊的紀錄都還在。`),
           h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.updateTenant(t.id, { endMonth: null }); ctx.go('#/settings'); } }, '搬回來（繼續出現在收租表）'))

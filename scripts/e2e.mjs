@@ -34,6 +34,16 @@ await page.evaluateOnNewDocument(() => {
   globalThis.Date = FakeDate;
   // 分享畫面替身
   window.__shared = [];
+  // 畫面上出現 null／undefined／NaN 的文字，任何時候都記下來（2026-10-07 實機出現「nullnull」，76 項測試沒抓到）。
+  // 不用單字邊界：「nullnull」用 \bnull\b 抓不到。
+  window.__garbage = [];
+  const GARBAGE = /null|undefined|NaN/;
+  const scan = (n) => {
+    const t = n.nodeType === 3 ? n.textContent : (n.nodeType === 1 ? n.textContent : '');
+    if (t && GARBAGE.test(t)) window.__garbage.push(`${t.match(GARBAGE)[0]}｜${location.hash || '#/'}｜${t.trim().slice(0, 30)}`);
+  };
+  new MutationObserver((ms) => { for (const m of ms) { m.addedNodes.forEach(scan); if (m.type === 'characterData') scan(m.target); } })
+    .observe(document, { subtree: true, childList: true, characterData: true });
   try { window.__shareMode = sessionStorage.getItem('__shareMode') || 'ok'; } catch { window.__shareMode = 'ok'; } // about:blank 讀不到 sessionStorage
   navigator.canShare = () => true;
   navigator.share = async ({ files }) => {
@@ -159,8 +169,12 @@ try {
   const openTile = async (label) => { const i = await tileOf(label); await nav(async () => (await page.$$('.tile'))[i].click()); };
   await openTile('2樓之2');
   // 2樓之2 是第 6 戶（index 5）：月租 6000+5×500＝8,500、5 號繳
+  const tb = await page.evaluate(() => { const b = document.querySelector('.topbar'); const k = b && b.querySelector('.backbtn'); const r = b && b.getBoundingClientRect(); return b ? { back: k ? k.textContent : '', title: b.querySelector('.topbar-title').textContent, top: r.top, h: r.height, backH: k ? k.getBoundingClientRect().height : 0 } : null; });
+  ok('詳情頁：最上面有標題列，返回鍵寫著「回收租表」（不只是箭頭）', !!tb && tb.back.includes('回收租表') && tb.title.length > 0, JSON.stringify(tb));
+  ok('詳情頁：標題列夠高、返回鍵至少 48 點高', !!tb && tb.h >= 56 && tb.backH >= 48);
   ok('點格子：顯示金額與繳款日', (await text('#app')).includes('8,500 元') && (await text('#app')).includes('每月 5 號繳'));
   await nav(() => clickText('a', '收到了'));
+  ok('確認頁：標題列「確定收到」＋「回上一頁」', (await page.$eval('.topbar', (b) => b.textContent)).includes('回上一頁') && (await page.$eval('.topbar-title', (b) => b.textContent)) === '確定收到');
   ok('確認頁：大字寫出名字與金額', (await text('#app')).includes('確定收到') && (await text('#app')).includes('8,500 元？'));
   // 拍一張收據（用合成的 JPEG）
   const jpgPath = await page.evaluate(async () => {
@@ -201,28 +215,30 @@ try {
   ok('記原因：那一格變黃、顯示原因前三個字', t[0].status === 'note' && t[0].line === '！ 說晚點', JSON.stringify(t[0]));
 
   // ---- 6. 版面：字放大、畫面變窄都不壞 ----
-  const fitCases = [
-    // [寬, 高, 字級, 設計草案 §3.3 表說一屏放得下嗎]
-    [390, 763, 'normal', true], [390, 763, 'large', true], [390, 763, 'xlarge', true], [390, 763, 'xxlarge', true],
-    [320, 626, 'normal', true], [320, 626, 'large', true], [320, 626, 'xlarge', true],
-    [320, 548, 'large', true],
-  ];
-  for (const [w, hgt, font, expectFit] of fitCases) {
-    await page.setViewport({ width: w, height: hgt, deviceScaleFactor: 2, isMobile: true });
-    await page.evaluate((f) => { document.documentElement.dataset.font = f; }, font);
-    await new Promise((r) => setTimeout(r, 50));
-    const m = await page.evaluate(() => {
-      const ts = [...document.querySelectorAll('.tile')];
-      const last = ts[ts.length - 1].getBoundingClientRect();
-      const labelsOk = ts.every((e) => { const l = e.querySelector('.tile-label'); return l.scrollWidth <= l.clientWidth + 1; });
-      const statusOk = ts.every((e) => { const s = e.querySelector('.tile-status'); return s.scrollWidth <= s.clientWidth + 1; });
-      return { bottom: Math.round(last.bottom + scrollY), h: innerHeight, labelsOk, statusOk, hs: document.documentElement.scrollWidth <= innerWidth + 1 };
-    });
-    // 預覽模式的紅色橫條只出現在瀏覽器分頁，主畫面 App 沒有；扣掉它的高度再比
-    const banner = await page.evaluate(() => { const b = document.querySelector('.preview-banner'); return b ? b.getBoundingClientRect().height : 0; });
-    const fits = m.bottom - banner <= m.h;
-    if (expectFit) ok(`${w}×${hgt}・${font}：10 格一屏放得下`, fits, `最後一格底 ${m.bottom - banner} / 可用 ${m.h}`);
-    ok(`${w}×${hgt}・${font}：沒有橫向捲動、格子裡的字沒被裁`, m.hs && m.labelsOk && m.statusOk);
+  // 加了稱呼之後每格三行：照實量每一種寬高×字級，列成表（INFO）；斷言的是「放不下就捲、不縮字、不裁字」
+  const SIZES = [[390, 763, 'iPhone 12'], [320, 626, 'iPhone 12 開縮放'], [320, 548, 'SE 開縮放']];
+  const ROOT_PX = { normal: 18, large: 22, xlarge: 26, xxlarge: 30 };
+  for (const [w, hgt, dev] of SIZES) {
+    const row = [];
+    for (const font of ['normal', 'large', 'xlarge', 'xxlarge']) {
+      await page.setViewport({ width: w, height: hgt, deviceScaleFactor: 2, isMobile: true });
+      await page.evaluate((f) => { document.documentElement.dataset.font = f; }, font);
+      await new Promise((r) => setTimeout(r, 50));
+      const m = await page.evaluate(() => {
+        const ts = [...document.querySelectorAll('.tile')];
+        const last = ts[ts.length - 1].getBoundingClientRect();
+        const clipped = ts.some((e) => [...e.children].some((c) => c.scrollWidth > c.clientWidth + 1));
+        const fontPx = parseFloat(getComputedStyle(ts[0].querySelector('.tile-label')).fontSize);
+        const nameShown = ts.every((e) => e.querySelector('.tile-name'));
+        return { bottom: Math.round(last.bottom + scrollY), h: innerHeight, clipped, fontPx, nameShown, hs: document.documentElement.scrollWidth <= innerWidth + 1 };
+      });
+      const banner = await page.evaluate(() => { const b = document.querySelector('.preview-banner'); return b ? b.getBoundingClientRect().height : 0; });
+      const bottom = m.bottom - banner;
+      row.push(`${font} ${bottom}${bottom <= m.h ? '✔' : '✘'}`);
+      ok(`${w}×${hgt}・${font}：格子裡有稱呼、沒有橫向捲動、字沒被裁`, m.nameShown && m.hs && !m.clipped);
+      ok(`${w}×${hgt}・${font}：放不下也不縮字（格子字級＝${ROOT_PX[font]}px）`, Math.abs(m.fontPx - ROOT_PX[font]) < 0.5, `${m.fontPx}px`);
+    }
+    results.push(`INFO 一屏量測 ${dev}（${w}×${hgt}，可用 ${hgt}）：最後一格的底 ${row.join('｜')}`);
   }
   await page.setViewport({ width: 320, height: 626, deviceScaleFactor: 2, isMobile: true });
   for (const font of ['normal', 'large', 'xlarge', 'xxlarge']) {
@@ -333,6 +349,8 @@ try {
   ok('已有資料：匯出一份之後才能按', true);
 
   ok('走過的每個畫面都沒有「晚輩」「家人」', seenWords.size === 0, [...seenWords].join('、'));
+  const garbage = await page.evaluate(() => window.__garbage);
+  ok('走過的每個畫面都沒有出現 null／undefined／NaN（含畫完後才補上的內容）', garbage.length === 0, [...new Set(garbage)].slice(0, 5).join('；'));
   ok('全程沒有 JavaScript 錯誤', errors.length === 0, errors.join(' | '));
 } catch (e) {
   ok('測試流程中斷', false, e.stack || String(e));
