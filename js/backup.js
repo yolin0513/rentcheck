@@ -8,7 +8,7 @@ import * as store from './store.js';
 import { buildPayload, renderBackupHtml, extractPayload, verifyPayload, contentHash, backupFileName, b64ToBytes } from './backupcore.js';
 
 export const PHOTO_WINDOW_MONTHS = 24;   // 每份備份帶最近 24 個月的照片（更舊的靠年度照片檔，尚未實作）
-export const SIZE_WARN_BYTES = 45 * 1048576; // LINE Keep 50 MB 以下不過期（二手來源），留一點餘裕
+export const SIZE_WARN_BYTES = 45 * 1048576; // 太大的檔案存起來或傳送都比較慢；超過就在匯出頁提醒
 
 export function screenSig() { return `${screen.width}x${screen.height}`; }
 

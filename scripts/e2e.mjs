@@ -43,7 +43,14 @@ await page.evaluateOnNewDocument(() => {
   };
 });
 
-const rendered = () => page.evaluate(() => Number(document.body.dataset.rendered || 0));
+// 每畫一次就檢查畫面文字：不出現「晚輩」「家人」（Yolin 2026-10-07）
+const seenWords = new Set();
+const rendered = async () => {
+  const t = await page.evaluate(() => (document.body ? document.body.innerText : ''));
+  for (const w of ['晚輩', '家人']) if (t.includes(w)) seenWords.add(`${w}（${await page.evaluate(() => location.hash)}）`);
+  return page.evaluate(() => Number(document.body.dataset.rendered || 0));
+};
+const _renderedOld = () => page.evaluate(() => Number(document.body.dataset.rendered || 0));
 async function nav(action) {
   const n = await rendered();
   await action();
@@ -94,10 +101,10 @@ try {
   const empty = await text('#app');
   ok('空的 App：說明「紀錄不見了請打電話給家人」', empty.includes('紀錄卻不見了') && empty.includes('從備份找回'));
   await nav(() => clickText('button', '第一次使用'));
-  ok('第一次使用直接進晚輩設定（還沒有資料，不用按住）', (await page.evaluate(() => location.hash)) === '#/settings');
-  ok('晚輩設定的頁首寫著「晚輩設定中」', (await text('.edit-top')).includes('晚輩設定中'));
+  ok('第一次使用直接進設定（還沒有資料，不用按住）', (await page.evaluate(() => location.hash)) === '#/settings');
+  ok('設定的頁首寫著「設定中」', (await text('.edit-top')).includes('設定中'));
 
-  // ---- 3. 晚輩新增 10 戶（故意打亂順序） ----
+  // ---- 3. 新增 10 戶（故意打亂順序） ----
   const floors = ['3樓之2', '10樓', '2樓之1', '5樓', '3樓之1', '2樓之2', '4樓之1', '6樓', '4樓之2', '7樓'];
   for (const [i, f] of floors.entries()) {
     await nav(() => page.click('[data-act="add-tenant"]'));
@@ -115,7 +122,7 @@ try {
   let t = await tiles();
   ok('收租表：10 格', t.length === 10, String(t.length));
   ok('收租表：位置照門牌排', t.map((x) => x.label).join(',') === '2樓之1,2樓之2,3樓之1,3樓之2,4樓之1,4樓之2,5樓,6樓,7樓,10樓', t.map((x) => x.label).join(','));
-  ok('剛設定完：還不會出現「傳紀錄」提醒（晚輩當場先傳第一份）', (await page.$('.remind')) === null);
+  ok('剛設定完：還不會出現「匯出備份」提醒', (await page.$('.remind')) === null);
   const setMetaV = (k, v) => page.evaluate((k, v) => new Promise((res) => {
     const r = indexedDB.open('rentcheck');
     r.onsuccess = () => { const t = r.result.transaction('meta', 'readwrite'); t.objectStore('meta').put({ k, v }); t.oncomplete = () => { r.result.close(); res(); }; };
@@ -123,18 +130,18 @@ try {
   const firstAt = await settingsVal('firstChangeAt');
   await setMetaV('firstChangeAt', new Date(Date.UTC(2026, 8, 29)).toISOString()); // 8 天前
   await reload();
-  ok('從沒傳過、第一筆資料滿 7 天：出現「還沒傳過紀錄」提醒', (await page.$('.remind')) !== null && (await text('.remind')).includes('還沒傳過'));
+  ok('從沒匯出過、第一筆資料滿 7 天：出現「還沒有匯出過備份」提醒', (await page.$('.remind')) !== null && (await text('.remind')).includes('還沒有匯出過'));
   await setMetaV('firstChangeAt', firstAt);
   await reload();
   ok('10/7：5 號繳的「該收了」、20 號繳的「還沒到」', t.filter((x) => x.status === 'due').length === 5 && t.filter((x) => x.status === 'notyet').length === 5);
 
-  // ---- 4. 按住 3 秒才進得去晚輩設定 ----
+  // ---- 4. 按住 3 秒才進得去設定 ----
   await hold(400);
   await new Promise((r) => setTimeout(r, 300));
-  ok('只按一下：不會進晚輩設定', (await page.evaluate(() => location.hash)) !== '#/settings');
+  ok('只按一下：不會進設定', (await page.evaluate(() => location.hash)) !== '#/settings');
   ok('只按一下：提示「要按住 3 秒」', (await page.$eval('body', (b) => b.textContent)).includes('要按住 3 秒'));
   await nav(() => hold(3300));
-  ok('按住 3 秒：進入晚輩設定', (await page.evaluate(() => location.hash)) === '#/settings');
+  ok('按住 3 秒：進入設定', (await page.evaluate(() => location.hash)) === '#/settings');
   // 切到背景 → 自動離開
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
@@ -143,7 +150,7 @@ try {
   await page.evaluate(() => { delete document.visibilityState; });
   // 不用 nav() 等畫面：沒離開的話這裡不會有新的畫面，等下去只會逾時；改成最多等 3 秒，再判斷結果
   const left = await page.waitForFunction(() => location.hash === '#/' && document.querySelectorAll('.tile').length === 10, { timeout: 3000 }).then(() => true, () => false);
-  ok('App 切到背景：自動離開晚輩設定', left);
+  ok('App 切到背景：自動離開設定', left);
   if (!left) await nav(() => page.evaluate(() => { location.hash = '#/'; }));
   ok('離開設定後直接打 #/settings 也進不去', await (async () => { await nav(() => page.evaluate(() => { location.hash = '#/settings'; })); return (await page.evaluate(() => location.hash)) === '#/'; })());
 
@@ -229,24 +236,28 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.font = 'large'; });
   await page.setViewport({ width: 390, height: 763, deviceScaleFactor: 2, isMobile: true });
 
-  // ---- 7. 收齊 → 問一次要不要傳 → 分享 ----
+  // ---- 7. 收齊 → 問一次要不要匯出 → 分享畫面 ----
   for (const label of ['2樓之1', '2樓之2', '3樓之1', '3樓之2', '4樓之1', '4樓之2', '5樓', '6樓', '7樓', '10樓']) {
     await openTile(label);
     await nav(() => clickText('a', '收到了'));
     await nav(() => page.click('[data-act="confirm"]'));
   }
-  ok('最後一戶收齊：問「要不要傳一份給家人」', (await page.evaluate(() => location.hash)).startsWith('#/done/') && (await text('#app')).includes('收齊了'));
-  await nav(() => clickText('a', '傳給家人'));
+  ok('最後一戶收齊：問「要不要匯出一份備份」', (await page.evaluate(() => location.hash)).startsWith('#/done/') && (await text('#app')).includes('收齊了'));
+  ok('收齊提示：不指定對象', !/晚輩|家人|LINE/.test(await text('#app')));
+  await nav(() => clickText('a', '匯出備份'));
+  ok('匯出頁：不指定對象與管道', !/晚輩|家人|LINE|Keep/.test(await text('#app')));
   await page.waitForFunction(() => !document.querySelector('[data-act="share"]').disabled, { timeout: 15000 });
   const seqBefore = await settingsVal('changeSeq');
   await page.click('[data-act="share"]');
   await page.waitForFunction(() => window.__shared.length === 1, { timeout: 15000 });
-  await page.waitForFunction(() => document.body.textContent.includes('傳好了'), { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelector('.result') && document.querySelector('.result').dataset.result, { timeout: 5000 });
+  const okMsg = await page.$eval('.result', (e) => ({ kind: e.dataset.result, text: e.textContent }));
+  ok('匯出成功：明確寫「備份已匯出」、檔名、存在 App 以外', okMsg.kind === 'shared' && okMsg.text.includes('✔ 備份已匯出') && okMsg.text.includes('收租紀錄_') && okMsg.text.includes('App 以外'), okMsg.text.slice(0, 60));
   const shared = await page.evaluate(() => window.__shared[0]);
   ok('分享出去的是 .html 備份檔', shared.name.endsWith('.html') && shared.text.includes('rentcheck-backup'), shared.name);
   ok('備份檔帶著收據照片', /"photos":\[\{"id":"ph-/.test(shared.text));
-  ok('分享成功：已傳出的位置＝當時的變更序號', (await settingsVal('backedUpSeq')) === seqBefore);
-  ok('分享成功：記下上次傳出時間', !!(await settingsVal('lastBackupAt')));
+  ok('分享成功：已匯出的位置＝當時的變更序號', (await settingsVal('backedUpSeq')) === seqBefore);
+  ok('分享成功：記下上次匯出時間', !!(await settingsVal('lastBackupAt')));
 
   // 取消分享 → 不算傳出
   await page.evaluate(() => sessionStorage.setItem('__shareMode', 'cancel'));
@@ -258,26 +269,29 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-act="share"]') && !document.querySelector('[data-act="share"]').disabled, { timeout: 15000 });
   const bu = await settingsVal('backedUpSeq');
   await page.click('[data-act="share"]');
-  await page.waitForFunction(() => document.body.textContent.includes('沒有傳出去'), { timeout: 5000 });
-  ok('對照組：按了取消 → 不算傳出', (await settingsVal('backedUpSeq')) === bu);
+  await page.waitForFunction(() => document.querySelector('.result') && document.querySelector('.result').dataset.result, { timeout: 5000 });
+  const cMsg = await page.$eval('.result', (e) => ({ kind: e.dataset.result, text: e.textContent }));
+  ok('取消：明確寫「沒有匯出」，和成功分得出來', cMsg.kind === 'cancelled' && cMsg.text.includes('✘ 沒有匯出') && !cMsg.text.includes('已匯出'), cMsg.text.slice(0, 40));
+  ok('取消：匯出按鈕還在，可以再按一次', !(await page.$eval('[data-act="share"]', (b) => b.hidden || b.disabled)));
+  ok('對照組：按了取消 → 不算匯出', (await settingsVal('backedUpSeq')) === bu);
   await page.evaluate(() => sessionStorage.setItem('__shareMode', 'ok'));
 
-  // ---- 8. 晚輩頁：「如果現在被清掉，會損失多少」 ----
+  // ---- 8. 設定頁：「如果現在被清掉，會損失多少」 ----
   await nav(() => page.evaluate(() => { location.hash = '#/'; }));
   await nav(() => hold(3300));
   const safety = await text('.settings .card');
-  ok('晚輩頁：寫出「如果現在被清掉，會損失 1 筆變更」', safety.includes('會損失') && safety.includes('1 筆變更'), safety.slice(0, 160).replace(/\s+/g, ' '));
-  ok('晚輩頁：顯示持久儲存的狀態', safety.includes('持久儲存'));
+  ok('設定頁：寫出「如果現在被清掉，會損失 1 筆變更」', safety.includes('會損失') && safety.includes('1 筆變更'), safety.slice(0, 160).replace(/\s+/g, ' '));
+  ok('設定頁：顯示持久儲存的狀態', safety.includes('持久儲存'));
   await page.waitForFunction(() => document.querySelector('.fit') && document.querySelector('.fit').dataset.fits, { timeout: 10000 });
-  ok('晚輩頁：字級預覽量得出「一屏放得下」', (await page.$eval('.fit', (e) => e.dataset.fits)) === 'true');
+  ok('設定頁：字級預覽量得出「一屏放得下」', (await page.$eval('.fit', (e) => e.dataset.fits)) === 'true');
   await setMetaV('lastBackupAt', new Date(Date.now() - 29 * 86400000).toISOString());
 
   // ---- 9. 提醒：超過 30 天沒傳、而且有新紀錄 ----
   await nav(() => page.click('[data-act="exit"]'));
-  ok('29 天前才傳過：沒有提醒', (await page.$('.remind')) === null);
+  ok('29 天前才匯出過：沒有提醒', (await page.$('.remind')) === null);
   await setMetaV('lastBackupAt', new Date(Date.now() - 31 * 86400000).toISOString());
   await reload();
-  ok('超過 30 天沒傳、之後有新紀錄：格子上方出現溫和的提醒', (await page.$('.remind')) !== null && !/遺失|危險|刪除/.test(await text('.remind')));
+  ok('超過 30 天沒匯出、之後有新紀錄：格子上方出現溫和的提醒', (await page.$('.remind')) !== null && !/遺失|危險|刪除/.test(await text('.remind')));
   const remindH = await page.$eval('.remind', (e) => e.getBoundingClientRect().height);
   ok('提醒條不超過兩行（不把房間格擠出去太多）', remindH <= 2 * 22 * 1.3 + 20, `${remindH}px`);
   await nav(() => page.click('.remind'));
@@ -302,7 +316,7 @@ try {
   await nav(() => clickText('a', '回到收租表'));
   t = await tiles();
   ok('找回後：10 格全部是「已收」（和備份當時一樣）', t.length === 10 && t.every((x) => x.status === 'paid'), t.map((x) => x.status).join(','));
-  ok('找回後：「上次傳出」＝備份的時間、沒有未傳出的變更', (await settingsVal('changeSeq')) === 0 && !!(await settingsVal('lastBackupAt')));
+  ok('找回後：「上次匯出」＝備份的時間、沒有未匯出的變更', (await settingsVal('changeSeq')) === 0 && !!(await settingsVal('lastBackupAt')));
 
   // ---- 11. 手機上已有資料時找回：一定要先存一份目前的 ----
   await nav(() => hold(3300));
@@ -311,13 +325,14 @@ try {
   await page.waitForFunction(() => document.body.textContent.includes('備份檔完整'), { timeout: 15000 });
   await page.waitForFunction(() => document.querySelector('[data-act="save-current"]') && !document.querySelector('[data-act="save-current"]').disabled, { timeout: 15000 });
   await page.type('input[placeholder*="找回"]', '找回');
-  ok('已有資料：沒先存一份目前的，就算輸入「找回」也不能按', await page.$eval('[data-act="restore"]', (b) => b.disabled));
+  ok('已有資料：沒先匯出一份目前的，就算輸入「找回」也不能按', await page.$eval('[data-act="restore"]', (b) => b.disabled));
   const n0 = await page.evaluate(() => window.__shared.length);
   await page.click('[data-act="save-current"]');
   await page.waitForFunction((n) => window.__shared.length > n, { timeout: 15000 }, n0);
   await page.waitForFunction(() => !document.querySelector('[data-act="restore"]').disabled, { timeout: 5000 });
-  ok('已有資料：存了一份之後才能按', true);
+  ok('已有資料：匯出一份之後才能按', true);
 
+  ok('走過的每個畫面都沒有「晚輩」「家人」', seenWords.size === 0, [...seenWords].join('、'));
   ok('全程沒有 JavaScript 錯誤', errors.length === 0, errors.join(' | '));
 } catch (e) {
   ok('測試流程中斷', false, e.stack || String(e));

@@ -5,7 +5,7 @@ import { h, holdButton, statusLine, STATUS, toast } from '../ui.js';
 import { ymOf, isoDate, addMonths, monthName, yearOf, isActive, cellStatus, shortDate } from '../months.js';
 
 export const REMIND_DAYS = 30;        // 距上次傳出超過幾天，就在格子上方提醒
-export const FIRST_REMIND_DAYS = 7;   // 從沒傳過：第一筆資料滿幾天後提醒（剛設定完由晚輩當場先傳第一份）
+export const FIRST_REMIND_DAYS = 7;   // 從沒匯出過：第一筆資料滿幾天後提醒（剛設定完通常會當場先匯出第一份）
 export const SNOOZE_DAYS = 7;
 
 export async function loadMonth(ym) {
@@ -53,7 +53,7 @@ export function needsReminder(s, now = Date.now()) {
 /** 提醒條：最多兩行、整條就是按鈕（「這週先不要」在備份頁）——不把房間格擠出畫面太多 */
 export function buildReminder(s) {
   return h('a', { class: 'remind', href: '#/backup?from=remind', role: 'note' },
-    s.lastBackupAt ? `好一陣子沒傳紀錄給${s.recipient}了，按這裡傳 ›` : `還沒傳過紀錄給${s.recipient}，按這裡傳 ›`);
+    s.lastBackupAt ? '好一陣子沒有匯出備份了，按這裡匯出 ›' : '還沒有匯出過備份，按這裡匯出 ›');
 }
 
 export async function renderGrid(ctx) {
@@ -70,9 +70,9 @@ export async function renderGrid(ctx) {
   page.append(cells.length ? buildTiles(cells, ym) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'));
 
   page.append(h('footer', { class: 'grid-foot' },
-    h('p', { class: 'muted center' }, s.lastBackupAt ? `上次傳紀錄給${s.recipient}：${shortDate(isoDate(new Date(s.lastBackupAt)))}` : `還沒傳過紀錄給${s.recipient}`),
-    h('a', { class: 'btn secondary small', href: '#/backup' }, `傳紀錄給${s.recipient}`),
-    holdButton('晚輩設定（按住 3 秒）', 3000, () => ctx.enterEdit(), () => toast('這是給晚輩設定用的，要按住 3 秒'))));
+    h('p', { class: 'muted center' }, s.lastBackupAt ? `上次匯出備份：${shortDate(isoDate(new Date(s.lastBackupAt)))}` : '還沒有匯出過備份'),
+    h('a', { class: 'btn secondary small', href: '#/backup' }, '匯出備份'),
+    holdButton('設定（按住 3 秒）', 3000, () => ctx.enterEdit(), () => toast('要按住 3 秒才會打開設定'))));
   return page;
 }
 
@@ -81,7 +81,7 @@ function emptyState(ctx) {
   return h('div', { class: 'page empty' },
     h('h1', null, '收租紀錄'),
     h('p', { class: 'lead' }, '這裡還沒有紀錄。'),
-    h('p', { class: 'lead' }, '如果以前用過、紀錄卻不見了，請打電話給幫你設定的家人，他可以用備份找回來。'),
+    h('p', { class: 'lead' }, '如果以前用過、紀錄卻不見了，可以用之前匯出的備份檔找回來。'),
     h('a', { class: 'btn', href: '#/restore' }, '從備份找回'),
-    h('button', { type: 'button', class: 'btn secondary', onclick: () => ctx.enterEdit() }, '第一次使用：開始設定（晚輩）'));
+    h('button', { type: 'button', class: 'btn secondary', onclick: () => ctx.enterEdit() }, '第一次使用：開始設定'));
 }

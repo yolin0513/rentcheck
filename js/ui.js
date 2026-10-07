@@ -32,7 +32,7 @@ export function statusLine(status, payment) {
 }
 
 /**
- * 要「按住 ms 毫秒」才會觸發的按鈕（防長輩誤觸晚輩設定）。
+ * 要「按住 ms 毫秒」才會觸發的按鈕（防止誤觸進入設定）。
  * 只點一下：呼叫 onShort（顯示說明），不進去。
  */
 export function holdButton(label, ms, onDone, onShort) {
@@ -67,7 +67,7 @@ export function holdButton(label, ms, onDone, onShort) {
   return btn;
 }
 
-/** 畫面底部短暫顯示一行字（給晚輩頁用；長輩的主要流程不依賴它） */
+/** 畫面底部短暫顯示一行字（給設定頁用；主要流程不依賴它） */
 export function toast(msg, ms = 2500) {
   const t = h('div', { class: 'toast', role: 'status' }, msg);
   document.body.append(t);

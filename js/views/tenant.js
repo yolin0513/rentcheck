@@ -92,7 +92,7 @@ function confirmPage(ctx, t, ym, p, back, title) {
     more);
 }
 
-/** 這個月剛好全部收齊、而且還有沒傳出的紀錄 → 問一次要不要傳給家人 */
+/** 這個月剛好全部收齊、而且還有沒匯出的紀錄 → 問一次要不要匯出備份 */
 async function afterPaidTarget(ym, back) {
   const [all, pays, s] = await Promise.all([store.tenants(), store.paymentsFor(ym), store.settings()]);
   const active = all.filter((x) => isActive(x, ym));
@@ -101,7 +101,7 @@ async function afterPaidTarget(ym, back) {
   return back;
 }
 
-/** 在使用者按下按鈕的當下順便請求持久儲存（沒拿到才請；結果記下來給晚輩看） */
+/** 在使用者按下按鈕的當下順便請求持久儲存（沒拿到才請；結果記下來，設定頁看得到） */
 export async function tryPersist() {
   try {
     if (!navigator.storage || !navigator.storage.persist) return;
@@ -141,7 +141,7 @@ function viewer(ctx, t, ym, id, url) {
     h('img', { src: url, alt: '收據照片' }),
     h('button', { type: 'button', class: 'btn', onclick: () => ov.remove() }, '關閉'),
     h('button', { type: 'button', class: 'btn secondary', onclick: async () => {
-      if (!confirm('要刪掉這張照片嗎？（晚輩可以從異動紀錄看到）')) return;
+      if (!confirm('要刪掉這張照片嗎？（設定裡的異動紀錄會記下來）')) return;
       await store.detachPhoto(t, ym, id);
       ov.remove();
       ctx.render();

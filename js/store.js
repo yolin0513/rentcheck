@@ -7,7 +7,6 @@ import { naturalCompare, isoDate, autoLabels } from './months.js';
 
 export const DEFAULTS = {
   fontStep: 'large',
-  recipient: '家人',
   noteOptions: ['說晚點給', '分次給', '聯絡不到', '其他'],
   changeSeq: 0,
   backedUpSeq: 0,
@@ -24,7 +23,7 @@ export const DEFAULTS = {
   restoredAt: null,
 };
 // 會跟著備份走的設定（其餘是這支手機自己的狀態）
-export const PORTABLE_META = ['fontStep', 'recipient', 'noteOptions', 'screenSig'];
+export const PORTABLE_META = ['fontStep', 'noteOptions', 'screenSig'];
 
 const nowISO = () => new Date().toISOString();
 export function uid() {
@@ -58,7 +57,7 @@ async function mutate(stores, fn, logEntry) {
 }
 
 // ---------- 租客 ----------
-/** 格子名稱沒被晚輩手動改過（labelAuto）的，跟著所有門牌重新去掉共同前綴 */
+/** 格子名稱沒被手動改過（labelAuto）的，跟著所有門牌重新去掉共同前綴 */
 function relabel(list) {
   const labels = autoLabels(list.map((x) => x.address));
   list.forEach((x, i) => { if (x.labelAuto) x.label = labels[i]; });
@@ -69,7 +68,7 @@ export async function tenants() {
 }
 export async function tenant(id) { return db.get('tenants', id); }
 
-/** 新增：依門牌自然排序插到對的位置（不打亂晚輩手動調過的順序） */
+/** 新增：依門牌自然排序插到對的位置（不打亂手動調過的順序） */
 export async function addTenant(data) {
   const list = await tenants();
   const t = { id: uid(), createdAt: nowISO(), updatedAt: nowISO(), endMonth: null, ...data };
@@ -159,7 +158,7 @@ export async function detachPhoto(t, ym, photoId) {
   const ph = await photo(photoId);
   await mutate(['payments', 'photos'], (s) => {
     s.payments.put(after);
-    if (ph) s.photos.put({ ...ph, deletedAt: nowISO() }); // 先標記，不真的刪（晚輩可從異動紀錄找回）
+    if (ph) s.photos.put({ ...ph, deletedAt: nowISO() }); // 先標記，不真的刪（異動紀錄裡查得到）
   }, { kind: 'photo-remove', text: `${t.label} ${ym} 刪掉一張收據照片`, before, after });
 }
 

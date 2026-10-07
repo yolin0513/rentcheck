@@ -1,4 +1,4 @@
-// 晚輩設定。進入要按住 3 秒；App 切到背景或 3 分鐘沒動作就自動離開。
+// 設定（畫面上不寫「晚輩」——通常由家人協助，但不指定是誰）。進入要按住 3 秒；App 切到背景或 3 分鐘沒動作就自動離開。
 // 這裡沒有「刪除租客」：只有「搬走」（可搬回）。收款狀態也不在這裡改——那是長輩在收租表做的事。
 
 import * as store from '../store.js';
@@ -12,7 +12,7 @@ const FONT_STEPS = [['normal', '標準'], ['large', '大'], ['xlarge', '特大']
 
 function topbar(ctx, title, back) {
   return h('div', { class: 'edit-top' },
-    h('div', { class: 'edit-title' }, '晚輩設定中', title ? `｜${title}` : ''),
+    h('div', { class: 'edit-title' }, '設定中', title ? `｜${title}` : ''),
     back ? h('a', { class: 'btn small light', href: back }, '上一頁') : null,
     h('button', { type: 'button', class: 'btn small light', 'data-act': 'exit', onclick: () => ctx.exitEdit() }, '離開設定'));
 }
@@ -54,13 +54,13 @@ export async function renderSettings(ctx) {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const ago = daysAgo(s.lastBackupAt);
   const lossText = !s.lastBackupAt
-    ? (c.tenants ? '全部的紀錄（還沒有傳出去過）' : '沒有東西會損失')
-    : s.unsent > 0 ? `上次傳出（${ago} 天前）之後的 ${s.unsent} 筆變更` : '不會損失（上次傳出之後沒有改過）';
-  page.append(section('資料安全（給晚輩看）',
-    h('p', { class: 'muted' }, '紀錄只存在這支 iPhone 裡，而且被清掉時不會有任何提示。所以手機裡這份只是「副本」；正本是最近一次傳出去、存在 Keep 或「檔案」裡的備份檔。'),
+    ? (c.tenants ? '全部的紀錄（還沒有匯出過）' : '沒有東西會損失')
+    : s.unsent > 0 ? `上次匯出（${ago} 天前）之後的 ${s.unsent} 筆變更` : '不會損失（上次匯出之後沒有改過）';
+  page.append(section('資料安全',
+    h('p', { class: 'muted' }, '紀錄只存在這支 iPhone 的 App 裡，而且被清掉時不會有任何提示。所以 App 裡這份只是「副本」；正本是最近一次匯出、存在 App 以外（例如「檔案」或 iCloud）的備份檔。'),
     row('如果現在被清掉，會損失', lossText, s.unsent > 0 || !s.lastBackupAt ? 'warn' : 'ok'),
-    row('上次傳出備份', s.lastBackupAt ? `${new Date(s.lastBackupAt).toLocaleString('zh-TW', { hour12: false })}（${ago} 天前，${fmtMB(s.lastBackupBytes)}${s.lastBackupHow === 'restored' ? '，從備份找回' : ''}）` : '還沒有'),
-    row('還沒傳出的變更', `${s.unsent} 筆` + (s.lastChangeAt ? `（最後一筆：${new Date(s.lastChangeAt).toLocaleString('zh-TW', { hour12: false })}）` : '')),
+    row('上次匯出備份', s.lastBackupAt ? `${new Date(s.lastBackupAt).toLocaleString('zh-TW', { hour12: false })}（${ago} 天前，${fmtMB(s.lastBackupBytes)}${s.lastBackupHow === 'restored' ? '，從備份找回' : ''}）` : '還沒有'),
+    row('還沒匯出的變更', `${s.unsent} 筆` + (s.lastChangeAt ? `（最後一筆：${new Date(s.lastChangeAt).toLocaleString('zh-TW', { hour12: false })}）` : '')),
     row('開啟方式', standalone ? '✔ 主畫面 App' : '✘ 瀏覽器分頁（預覽）——資料可能被清掉', standalone ? 'ok' : 'bad'),
     row('持久儲存', persisted === true ? '✔ iPhone 已答應保留這裡的資料（刪掉圖示、清除 Safari 資料時是否保留，尚未實測）'
       : persisted === false ? '✘ iPhone 沒有答應；空間不足時可能被清' : '？ 這支手機讀不到', persisted ? 'ok' : 'bad'),
@@ -73,9 +73,9 @@ export async function renderSettings(ctx) {
       await store.setMeta('persist', { at: new Date().toISOString(), result: r });
       ctx.render();
     } }, '請求持久儲存'),
-    h('a', { class: 'btn', href: '#/backup' }, '現在傳一份備份'),
+    h('a', { class: 'btn', href: '#/backup' }, '現在匯出備份'),
     h('a', { class: 'btn secondary', href: '#/restore' }, '從備份找回'),
-    h('p', { class: 'muted' }, '收到長輩傳來的備份檔後：在 LINE 點開 → 分享 →「儲存到 Keep」或「儲存到檔案」。LINE 聊天室裡的檔案大約 7 天後就不能下載。只要留最新的一份。')));
+    h('p', { class: 'muted' }, '匯出的檔案存在 App 以外的地方，App 的資料被清掉時它還在。每一份都是完整的，只要留最新的一份。傳到聊天軟體的檔案可能過一陣子就不能下載，最好另外存一份。')));
 
   // ---- 2. 租客 ----
   const cur = ymOf();
@@ -115,14 +115,11 @@ export async function renderSettings(ctx) {
   } else fitBox.textContent = '還沒有租客，新增之後才量得出來。';
 
   // ---- 4. 其他 ----
-  const rec = h('input', { type: 'text', class: 'field', value: s.recipient, 'aria-label': '備份傳給誰' });
   const notes = h('textarea', { class: 'field', rows: '3', 'aria-label': '還沒收的原因選項' });
   notes.value = s.noteOptions.join('\n');
-  page.append(section('其他',
-    h('label', null, '備份要傳給誰（顯示用的稱呼，例如「小明」）', rec),
+  page.append(section('還沒收的原因',
     h('label', null, '「還沒收的原因」選項（一行一個）', notes),
     h('button', { type: 'button', class: 'btn secondary', onclick: async () => {
-      await store.setMeta('recipient', rec.value.trim() || '家人');
       await store.setMeta('noteOptions', notes.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 8));
       toast('存好了');
     } }, '存起來')));

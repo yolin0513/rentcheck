@@ -1,8 +1,8 @@
 // 備份檔的純函式：組資料、算內容雜湊、產生 .html、從 .html 讀回來、驗證。
 // 不碰 DOM、不碰 IndexedDB——Node 也能直接跑測試。
 //
-// 為什麼是 .html：iPhone 的分享畫面要能把檔案交給 LINE；可分享的檔案類型有 HTML、沒有 JSON／ZIP（MDN）。
-// 而且晚輩在 LINE 點開就是一張看得懂的表，不用裝 App。
+// 為什麼是 .html：要能經由 iPhone 的分享畫面交給其他 App；可分享的檔案類型有 HTML、沒有 JSON／ZIP（MDN）。
+// 而且檔案本身點開就是一張看得懂的表，不用裝 App。
 
 export const BACKUP_VERSION = 1;
 export const SCHEMA_VERSION = 1;
@@ -47,7 +47,7 @@ export async function contentHash({ tenants, payments, photos /* [{id, bytes}] *
 
 /**
  * 組出備份的內容。photos：[{id, type, createdAt, bytes:Uint8Array}]
- * meta 只帶設定類的值（家人稱呼、註記選項、字的大小、螢幕尺寸），不帶「上次備份」這類狀態。
+ * meta 只帶設定類的值（原因選項、字的大小、螢幕尺寸），不帶「上次備份」這類狀態。
  */
 export async function buildPayload({ meta, tenants, payments, photos, log, now = new Date() }) {
   const hash = await contentHash({ tenants, payments, photos });
@@ -113,7 +113,7 @@ export function renderBackupHtml(p) {
     '<style>body{font:17px/1.5 -apple-system,"PingFang TC",sans-serif;margin:16px;color:#111;background:#fff}table{border-collapse:collapse;width:100%;margin-bottom:1rem}' +
     'td,th{border-bottom:1px solid #ddd;padding:4px;text-align:left;vertical-align:top}.n{text-align:right}h2{margin:1.5rem 0 .25rem}img{max-width:100%;margin:.5rem 0}</style></head><body>' +
     `<h1>收租紀錄</h1><p>備份時間：${esc(p.exportedAt.slice(0, 16).replace('T', ' '))}（世界標準時間）<br>租客 ${p.tenants.length} 位、收款紀錄 ${p.payments.length} 筆、收據照片 ${p.photos.length} 張。</p>` +
-    '<p><b>請把這個檔案存到 LINE 的 Keep 或 iPhone 的「檔案」</b>——LINE 聊天室裡的檔案過一陣子就不能下載了。要找回資料時，在收租 App 裡選「從備份找回」，選這個檔案。</p>' +
+    '<p><b>請把這個檔案存好</b>（例如 iPhone 的「檔案」App 或 iCloud 雲碟）。傳到聊天軟體的檔案可能過一陣子就不能下載，最好另外存一份。要找回資料時，在收租 App 的設定裡選「從備份找回」，選這個檔案。</p>' +
     sections +
     '<div id="photos"></div>' +
     `${MARK_OPEN}${json}${MARK_CLOSE}` +

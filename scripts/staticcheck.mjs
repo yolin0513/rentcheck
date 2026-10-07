@@ -1,7 +1,8 @@
 // 靜態檢查（秒級，不開瀏覽器）：
 // 1. App 裡不得有依賴瀏覽器識別字串／iOS 版本號的邏輯。
 //    Safari 26 起回報的 iOS 版本被 Apple 固定成 18.x，任何「看版本號」的判斷式都會錯。
-// 2. sw.js 的預快取清單 = 實際的 App 檔案；sw.js 與 js/version.js 的版本號一致。
+// 2. 畫面文字不得出現「晚輩」「家人」：設定是中性的「設定」，備份不指定對象（Yolin 2026-10-07）。
+// 3. sw.js 的預快取清單 = 實際的 App 檔案；sw.js 與 js/version.js 的版本號一致。
 // 每一類都先跑對照組（餵一個一定該命中的樣本），對照組沒命中就判紅——檢查器本身壞了也會被發現。
 
 import fs from 'node:fs';
@@ -32,7 +33,17 @@ const bad = appFiles.flatMap((f) => {
 });
 ok('App 程式沒有依賴瀏覽器識別字串或 iOS 版本號', bad.length === 0, bad.join('; '));
 
-// ---- 2. Service Worker 預快取清單與版本 ----
+// ---- 2. 畫面文字不指定對象 ----
+const WORDS = [/晚輩/, /家人/];
+const wordHits = (code) => WORDS.filter((re) => re.test(code)).map(String);
+ok('對照組：檢查器抓得到畫面文字裡的「晚輩」', wordHits("h('button', null, '晚輩設定')").length === 1);
+const badWords = appFiles.flatMap((f) => {
+  const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/<!--[\s\S]*?-->/g, '');
+  return wordHits(code).map((h) => `${path.relative(ROOT, f)}: ${h}`);
+});
+ok('畫面文字沒有「晚輩」「家人」', badWords.length === 0, badWords.join('; '));
+
+// ---- 3. Service Worker 預快取清單與版本 ----
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const listed = new Set([...sw.matchAll(/'\.\/([^']*)'/g)].map((m) => m[1]).filter(Boolean));
 const actual = new Set([

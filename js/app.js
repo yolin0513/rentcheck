@@ -1,4 +1,4 @@
-// 啟動、路由、晚輩設定模式。
+// 啟動、路由、設定模式。
 // 原則：App 裡**沒有任何依賴 iOS 版本號或瀏覽器識別字串的邏輯**——Safari 26 起回報的 iOS 版本被固定成 18.x，
 // 拿它判斷一定會錯。一律用功能偵測（matchMedia、navigator.storage、navigator.canShare）。
 // scripts/staticcheck.mjs 會擋下 userAgent 這類字樣。
@@ -32,7 +32,7 @@ export function go(hash) {
   if (location.hash === hash) render(); else location.hash = hash;
 }
 
-// ---------- 晚輩設定模式 ----------
+// ---------- 設定模式 ----------
 export function enterEdit() {
   state.edit = true;
   bumpEdit();
@@ -52,7 +52,7 @@ function bumpEdit() {
 addEventListener('pointerdown', bumpEdit, true);
 addEventListener('keydown', bumpEdit, true);
 document.addEventListener('visibilitychange', () => {
-  // App 切到背景就離開設定：晚輩忘了按「離開」，長輩下次打開也一定是收租表
+  // App 切到背景就離開設定：忘了按「離開」，下次打開也一定是收租表
   if (document.visibilityState === 'hidden' && state.edit) exitEdit();
 });
 
