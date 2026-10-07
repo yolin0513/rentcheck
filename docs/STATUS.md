@@ -4,6 +4,17 @@
 
 ## 目前進行中／交接
 
+- **【最新，2026-10-07】部署改走 GitHub Pages**（Yolin：「就放在 github」）。照四個 App 的方式：**各自獨立的 public repo**＋GitHub Pages（legacy、`main` 分支根目錄）。四個都是 `yolin0513/<名字>`、PUBLIC、`main`、`https://yolin0513.github.io/<名字>/`。本 App 預定 `yolin0513/rentcheck` → `https://yolin0513.github.io/rentcheck/`。
+  - **推送閘門已建好**：`scripts/pushgate.sh`（照 MealMate 移植）＋`scripts/selfcheck.mjs`＋驗法 `scripts/pushgate-verify.sh`（本機假遠端 14 種情境全部符合、已登記）＋閘門突變 `scripts/pushgate-mutants.sh`（3 條全部被驗法抓到）。**推送一律用 `bash scripts/pushgate.sh`，不要直接 `git push`。**
+  - **擋在兩件事上，都還沒推**：
+    1. **圖示還沒挑**（見下一點與 Q4）——iPhone 在「加入主畫面」那一刻記下圖示，先上線再換，他會看到兩個圖示。
+    2. **本機歷史裡有一個 commit 過不了自查**（Q5）：`圖示三選一與部署準備` 那個 commit 的 `scripts/predeploy-scan.mjs` 有 3 行合成的範例字串（像 email、像 Windows 路徑），被自查擋下——閘門照規則擋是對的。後來的 commit 已改成執行時組出，但第一次推送會查全部歷史。要改寫本機（從沒推過的）歷史，照共用慣例 §2.3 先問。
+  - repo 還沒建、Pages 還沒開。**順序**：Q4、Q5 回覆 → 改寫歷史（若同意）→ 產生圖示、升 0.3.0、commit → `bash scripts/pushgate-verify.sh`（閘門檔案的雜湊若變了要重登記）→ `gh repo create yolin0513/rentcheck --public` → `bash scripts/pushgate.sh` → 開 Pages（`main`、`/`）→ 等 Pages 建好、抓 `js/version.js` 比對。
+- **Cloudflare 這條路先不走，但留著（Dispatch 2026-10-07 指示記下）**：
+  - **長輩真的要用之前，要把 App 搬到獨立的來源**（跟其他四個 App 分開）。理由：瀏覽器的儲存、持久儲存的許可、被清除，都是照「來源」（`https://yolin0513.github.io`）整包算的——放在 `yolin0513.github.io/rentcheck/`，就和 JLPT、StockDiary、MealMate、TripQuest 共用同一個來源。同一個來源的儲存是整包一起清的，**租金紀錄不能跟其他 App 共用同一個命運**。（長輩手機上目前沒有那四個 App，但 Yolin 自己的手機上有；將來若有人在長輩手機上也裝了其中一個，就會綁在一起。）
+  - 那時 Cloudflare 是現成的選項：本機 wrangler 已登入 Yolin 的帳號、有 Pages／Workers 寫入權限；`wrangler.jsonc`（Workers 靜態資產，只上傳 `dist/`）與 `scripts/deploy.sh`（測試 → 打包 → 部署前個資掃描 → 上傳 → 線上版本比對）都已備好，試跑通過。網址會是 `rentcheck.<帳號子網域>.workers.dev`。
+  - **搬家要注意**：換來源＝換一個空的儲存區。搬之前長輩手機上要先「匯出備份」，搬過去後「從備份找回」。
+
 - **【最新】等 Yolin 挑圖示（A／B／C），挑完才部署。** Yolin 原話：「app圖示太醜了，請他重新設計」。
   - 三個候選在 `scripts/icon-designs.mjs`；比較圖用 `npm run icon-preview` 產生在 `.logs/icons/圖示候選.png`（不進版控）。
   - **為什麼還沒部署**：Dispatch 指示「圖示先做，做好再部署——不要部署完才換圖示」。iPhone 是在「加入主畫面」那一刻記下圖示的，先用某一個上線、他再挑別的，他會看到兩個不同的圖示。
@@ -32,6 +43,7 @@
 |---|---|---|---|
 | Q1 | ~~怎麼讓 Yolin 在 iPhone 上看到~~ **已定（Dispatch 核准 Cloudflare，非 yolin0513.github.io）**；等 Q4 挑完圖示就部署 | **a** Cloudflare Pages 直接上傳 `dist/`（`npm run pack` 產生，23 個檔、約 110 KB；Yolin 在後台拖一個資料夾，約 5 分鐘；網址和其他四個 App 不同來源；不經過 git，不需要閘門）。**b** 照四個 App 的慣例：新的 public repo＋GitHub Pages（`yolin0513.github.io/rentcheck/`）——要先移植推送閘門（一輪的工作量），而且和四個 App **同一個來源**。**c** 這台電腦開本機伺服器、iPhone 連同一個 Wi-Fi：不對外，但不是 HTTPS，**匯出備份、照片、持久儲存都不能用**，只能看版面 | **a** 先看；確定要長期用時再決定正式放哪 |
 | Q4 | **圖示三選一**：A 房子打勾（深綠）／B 硬幣打勾（黃黑）／C 房間格（深藍） | 見 `.logs/icons/圖示候選.png`。三個在 60 點、29 點、黑白、模糊下都看得出形狀；B 對比最強但和黃色 App 撞色、意思較泛（像待辦清單）；C 和 App 畫面一致，但 29 點時勾很小 | 開發者傾向 A（意思最直接：房子＝收租、勾＝收到了；重度模糊後房子的外形還在），但審美由 Yolin 決定 |
+| Q5 | **改寫本機歷史（從沒推過）** | **a（建議）** 把那一個 commit 裡的 3 行範例改成現在的寫法（其餘內容不變），後面的 commit 接回去；舊 commit 留在 reflog 可找回。**b** 把 5 個本機 commit 壓成 1 個（簡單，但失去本機的分段紀錄）。**c** 在閘門加白名單放這 3 行過——**不建議**（閘門開洞，以後別的東西也可能從洞裡過去） | a |
 | Q2 | 拍收據：直接開相機，還是讓使用者選「拍照／從相簿」 | 直接開相機：少一步，但轉帳截圖放不進來。選單：多一步 | 先直接開相機，看實際拍的是什麼 |
 | Q3 | 設計草案 D3、D4、D5 | 見設計草案第 10 節 | 這一版照建議做了：D3 要照片、D4 不縮字、D5 砍掉的都沒做 |
 
