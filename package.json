@@ -1,0 +1,21 @@
+{
+  "name": "rentcheck",
+  "version": "0.1.0",
+  "description": "收租紀錄 — 給長輩用的收租確認 PWA：大字、一屏看完 10 戶、按錯可改回、用 LINE 傳備份。資料只在手機裡，備份檔是正本。",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "node scripts/serve.mjs 5190",
+    "icons": "node scripts/make-icons.mjs",
+    "staticcheck": "node scripts/staticcheck.mjs",
+    "unittest": "node scripts/unittest.mjs",
+    "e2e": "node scripts/e2e.mjs",
+    "test": "node scripts/staticcheck.mjs && node scripts/unittest.mjs && node scripts/e2e.mjs",
+    "mutate": "node scripts/mutate.mjs",
+    "pack": "node scripts/pack.mjs"
+  },
+  "devDependencies": {
+    "puppeteer": "23.11.1"
+  }
+}
