@@ -5,7 +5,7 @@
  *
  * 每次改動任何 SHELL 檔案都要 bump VERSION，並同步 js/version.js（scripts/staticcheck.mjs 會比對）。
  */
-const VERSION = 'rentcheck-v0.2.0';
+const VERSION = 'rentcheck-v0.3.0';
 const SHELL = `${VERSION}-shell`;
 
 const SHELL_ASSETS = [
@@ -16,6 +16,7 @@ const SHELL_ASSETS = [
   './icons/icon-180.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
   './js/app.js',
   './js/backup.js',
   './js/backupcore.js',

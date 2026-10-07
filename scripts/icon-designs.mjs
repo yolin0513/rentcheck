@@ -48,12 +48,31 @@ export const DESIGNS = {
     name: '房間格',
     idea: '深藍底、四格房間（白），右下那一格是黃色、打了勾。和 App 裡的房間格是同一個樣子。',
     fg: '#ffffff', bg: '#0A3577',
-    draw: `(g, s) => {
+    // 2026-10-07 Yolin 選定後加強：格子加大、間距縮小、勾加粗到 0.13 並撐滿黃格（舊版 C0：29 點、輕度模糊下勾的對比只有 1.9：1；參數掃描見 STATUS）
+    draw: `(g, s, o = {}) => {
+      g.fillStyle = '#0A3577'; g.fillRect(0, 0, s, s);
+      const box = 0.335 * s, gap = 0.045 * s, x0 = (s - (2 * box + gap)) / 2, r = 0.04 * s;
+      const rr = (x, y, w, h) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fill(); };
+      for (const [i, j] of [[0, 0], [1, 0], [0, 1]]) { g.fillStyle = '#ffffff'; rr(x0 + i * (box + gap), x0 + j * (box + gap), box, box); }
+      g.fillStyle = '#FFC414'; const bx = x0 + box + gap, by = x0 + box + gap; rr(bx, by, box, box);
+      if (o.noCheck) return;
+      g.strokeStyle = '#0A3577'; g.lineWidth = 0.13 * s; g.lineCap = 'round'; g.lineJoin = 'round';
+      g.beginPath();
+      g.moveTo(bx + 0.21 * box, by + 0.52 * box); g.lineTo(bx + 0.42 * box, by + 0.74 * box); g.lineTo(bx + 0.79 * box, by + 0.29 * box);
+      g.stroke();
+    }`,
+  },
+  C0: {
+    name: '房間格（舊版，只供比較）',
+    idea: 'Yolin 選定前的版本。',
+    fg: '#ffffff', bg: '#0A3577', compareOnly: true,
+    draw: `(g, s, o = {}) => {
       g.fillStyle = '#0A3577'; g.fillRect(0, 0, s, s);
       const box = 0.31 * s, gap = 0.07 * s, x0 = (s - (2 * box + gap)) / 2, r = 0.05 * s;
       const rr = (x, y, w, h) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fill(); };
       for (const [i, j] of [[0, 0], [1, 0], [0, 1]]) { g.fillStyle = '#ffffff'; rr(x0 + i * (box + gap), x0 + j * (box + gap), box, box); }
       g.fillStyle = '#FFC414'; const bx = x0 + box + gap, by = x0 + box + gap; rr(bx, by, box, box);
+      if (o.noCheck) return;
       g.strokeStyle = '#0A3577'; g.lineWidth = 0.06 * s; g.lineCap = 'round'; g.lineJoin = 'round';
       g.beginPath();
       g.moveTo(bx + 0.24 * box, by + 0.52 * box); g.lineTo(bx + 0.43 * box, by + 0.70 * box); g.lineTo(bx + 0.77 * box, by + 0.32 * box);
