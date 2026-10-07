@@ -1,8 +1,21 @@
 # 收租紀錄（RentCheck）— 現況與交接
 
-> 最後更新：2026-10-07（v0.2.0）
+> 最後更新：2026-10-07（v0.2.0；圖示三選一與部署準備完成，等 Yolin 挑圖示）
 
 ## 目前進行中／交接
+
+- **【最新】等 Yolin 挑圖示（A／B／C），挑完才部署。** Yolin 原話：「app圖示太醜了，請他重新設計」。
+  - 三個候選在 `scripts/icon-designs.mjs`；比較圖用 `npm run icon-preview` 產生在 `.logs/icons/圖示候選.png`（不進版控）。
+  - **為什麼還沒部署**：Dispatch 指示「圖示先做，做好再部署——不要部署完才換圖示」。iPhone 是在「加入主畫面」那一刻記下圖示的，先用某一個上線、他再挑別的，他會看到兩個不同的圖示。
+  - **挑完之後（約 1 分鐘）**：
+    1. `node scripts/make-icons.mjs <A|B|C>`
+    2. 在 `manifest.webmanifest` 加上 `icon-maskable-512.png`（`"purpose": "maskable"`），`sw.js` 的預快取清單也加上
+    3. 版本升到 0.3.0（`sw.js`、`js/version.js`、`package.json`）
+    4. commit
+    5. `bash scripts/deploy.sh`：測試 → 打包 → 部署前個資掃描 → 上傳 → 從線上抓版本號回來比對
+  - **部署方式改了**：Cloudflare 已把 Pages 併進 Workers，`wrangler pages project create` 會被導到新做法而失敗（**沒有建立、也沒有上傳任何東西**）。改用 Workers 靜態資產（`wrangler.jsonc`，只上傳 `dist/`），試跑（`--dry-run`）已通過。網址會是 `https://rentcheck.<帳號子網域>.workers.dev`，和其他 App 不同來源。Dispatch 核准的是「Cloudflare Pages 上傳 dist/」，這是同一件事換了名字，部署時要在回報裡講明。
+  - 部署腳本的第 3 關（個資掃描）實測會擋：黑名單放一個 dist 裡一定有的詞，腳本停在回傳 3，沒有產生任何上傳紀錄。
+  - 掃描抓不到「真實姓名」，除非 `.logs/private-words.txt`（不進版控）有 Yolin 家的真實資料黑名單。目前沒有這份；dist 裡的人名與地址人工看過，只有「王先生」（輸入欄的範例提示）與「中山路12號…」（說明用的範例），都是合成的通用例子。
 
 - **v0.2.0 完成，還沒給 Yolin 看**。目的：讓 Yolin 在 iPhone 上實際打開，看哪裡要改（Yolin 原話：「可以先實作出來讓我看哪裡要改」）。
 - v0.2.0 依 Yolin 兩個調整：
@@ -17,7 +30,8 @@
 
 | # | 問題 | 選項與代價 | 建議 |
 |---|---|---|---|
-| Q1 | 怎麼讓 Yolin 在 iPhone 上看到 | **a** Cloudflare Pages 直接上傳 `dist/`（`npm run pack` 產生，23 個檔、約 110 KB；Yolin 在後台拖一個資料夾，約 5 分鐘；網址和其他四個 App 不同來源；不經過 git，不需要閘門）。**b** 照四個 App 的慣例：新的 public repo＋GitHub Pages（`yolin0513.github.io/rentcheck/`）——要先移植推送閘門（一輪的工作量），而且和四個 App **同一個來源**。**c** 這台電腦開本機伺服器、iPhone 連同一個 Wi-Fi：不對外，但不是 HTTPS，**匯出備份、照片、持久儲存都不能用**，只能看版面 | **a** 先看；確定要長期用時再決定正式放哪 |
+| Q1 | ~~怎麼讓 Yolin 在 iPhone 上看到~~ **已定（Dispatch 核准 Cloudflare，非 yolin0513.github.io）**；等 Q4 挑完圖示就部署 | **a** Cloudflare Pages 直接上傳 `dist/`（`npm run pack` 產生，23 個檔、約 110 KB；Yolin 在後台拖一個資料夾，約 5 分鐘；網址和其他四個 App 不同來源；不經過 git，不需要閘門）。**b** 照四個 App 的慣例：新的 public repo＋GitHub Pages（`yolin0513.github.io/rentcheck/`）——要先移植推送閘門（一輪的工作量），而且和四個 App **同一個來源**。**c** 這台電腦開本機伺服器、iPhone 連同一個 Wi-Fi：不對外，但不是 HTTPS，**匯出備份、照片、持久儲存都不能用**，只能看版面 | **a** 先看；確定要長期用時再決定正式放哪 |
+| Q4 | **圖示三選一**：A 房子打勾（深綠）／B 硬幣打勾（黃黑）／C 房間格（深藍） | 見 `.logs/icons/圖示候選.png`。三個在 60 點、29 點、黑白、模糊下都看得出形狀；B 對比最強但和黃色 App 撞色、意思較泛（像待辦清單）；C 和 App 畫面一致，但 29 點時勾很小 | 開發者傾向 A（意思最直接：房子＝收租、勾＝收到了；重度模糊後房子的外形還在），但審美由 Yolin 決定 |
 | Q2 | 拍收據：直接開相機，還是讓使用者選「拍照／從相簿」 | 直接開相機：少一步，但轉帳截圖放不進來。選單：多一步 | 先直接開相機，看實際拍的是什麼 |
 | Q3 | 設計草案 D3、D4、D5 | 見設計草案第 10 節 | 這一版照建議做了：D3 要照片、D4 不縮字、D5 砍掉的都沒做 |
 
@@ -111,4 +125,6 @@ Yolin 2026-10-07 決定：地基實測只做「刪掉主畫面圖示」（`../Re
 2. **提醒卡把房間格擠出畫面**：剛設定完、還沒備份過就立刻出現約 170 點高的提醒卡，「大」字級在 320×626 下最後一格跑到 698。改成：從沒匯出過時，第一筆資料滿 7 天才提醒；提醒條最多兩行；設定頁分開顯示「平常／出現提醒時」放不放得下。
 3. **puppeteer 安裝失敗**：附帶的瀏覽器下載失敗。用 `PUPPETEER_SKIP_DOWNLOAD=1 npm install`，Chrome 131 已在 `~/.cache/puppeteer`。
 4. **測試裡的重新載入**：「畫完幾次」的計數在新頁面會歸零，用 `reload()` 輔助函式等第一次畫完，不要用 `nav()`。
+6. **打包計數多算一個**：`sw.js` 的離線回退那一行也寫了 `'./index.html'`，`pack.mjs` 原本沒去重，報「23 個檔」，實際 22 個（內容沒錯）。已改成去重。
+7. **Cloudflare Pages 併進 Workers**：`wrangler pages project create` 會被導到新做法而失敗；改用 `wrangler.jsonc`（Workers 靜態資產）＋`wrangler deploy`。
 5. **Git Bash 的 heredoc 偶爾會解析失敗**（內容含某些引號組合時）：要改多個檔案時，把 Python 腳本寫成檔案（放 `.logs/`）再執行。

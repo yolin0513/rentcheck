@@ -13,9 +13,13 @@
     "e2e": "node scripts/e2e.mjs",
     "test": "node scripts/staticcheck.mjs && node scripts/unittest.mjs && node scripts/e2e.mjs",
     "mutate": "node scripts/mutate.mjs",
-    "pack": "node scripts/pack.mjs"
+    "pack": "node scripts/pack.mjs",
+    "icon-preview": "node scripts/icon-preview.mjs && node scripts/icon-sheet.mjs",
+    "predeploy-scan": "node scripts/predeploy-scan.mjs",
+    "deploy": "bash scripts/deploy.sh"
   },
   "devDependencies": {
-    "puppeteer": "23.11.1"
+    "puppeteer": "23.11.1",
+    "wrangler": "^4.131.0"
   }
 }

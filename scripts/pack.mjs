@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = path.join(ROOT, 'dist');
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-const files = [...sw.matchAll(/'\.\/([^']+)'/g)].map((m) => m[1]).concat(['sw.js']);
+// 去重：sw.js 的離線回退那一行也寫了 './index.html'
+const files = [...new Set([...sw.matchAll(/'\.\/([^']+)'/g)].map((m) => m[1]))].concat(['sw.js']);
 
 fs.rmSync(DIST, { recursive: true, force: true });
 let bytes = 0;

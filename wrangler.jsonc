@@ -1,0 +1,11 @@
+// Cloudflare Workers 靜態資產託管（Cloudflare 已把 Pages 併進 Workers）。
+// 只上傳 dist/（npm run pack 產生，只含 App 檔案）；沒有任何伺服器程式。
+// 部署：bash scripts/deploy.sh（會先跑測試、打包、部署前個資掃描，全部通過才上傳）
+{
+  "name": "rentcheck",
+  "compatibility_date": "2026-09-10",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
