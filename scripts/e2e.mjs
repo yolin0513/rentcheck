@@ -87,6 +87,8 @@ const settingsVal = (k) => page.evaluate((k) => new Promise((res) => {
   r.onsuccess = () => { const q = r.result.transaction('meta').objectStore('meta').get(k); q.onsuccess = () => { res(q.result ? q.result.v : undefined); r.result.close(); }; };
 }), k);
 async function hold(ms) {
+  const sc = await page.evaluate(() => visualViewport.scale);
+  if (Math.abs(sc - 1) > 0.001) throw new Error(`畫面被縮放了（${sc}），滑鼠座標會偏——測試環境問題，先 reload()`);
   const btn = await page.$('.hold');
   await btn.evaluate((e) => e.scrollIntoView({ block: 'center' }));
   const box = await btn.boundingBox();
@@ -172,7 +174,7 @@ try {
   const tb = await page.evaluate(() => { const b = document.querySelector('.topbar'); const k = b && b.querySelector('.backbtn'); const r = b && b.getBoundingClientRect(); return b ? { back: k ? k.textContent : '', title: b.querySelector('.topbar-title').textContent, top: r.top, h: r.height, backH: k ? k.getBoundingClientRect().height : 0 } : null; });
   ok('詳情頁：最上面有標題列，返回鍵寫著「回收租表」（不只是箭頭）', !!tb && tb.back.includes('回收租表') && tb.title.length > 0, JSON.stringify(tb));
   ok('詳情頁：標題列夠高、返回鍵至少 48 點高', !!tb && tb.h >= 56 && tb.backH >= 48);
-  ok('點格子：顯示金額與繳款日', (await text('#app')).includes('8,500 元') && (await text('#app')).includes('每月 5 號繳'));
+  ok('點格子：顯示金額與繳款日', (await text('.amount')).replace(/\s/g, '') === '8,500元' && (await text('#app')).includes('每月 5 號繳'));
   await nav(() => clickText('a', '收到了'));
   ok('確認頁：標題列「確定收到」＋「回上一頁」', (await page.$eval('.topbar', (b) => b.textContent)).includes('回上一頁') && (await page.$eval('.topbar-title', (b) => b.textContent)) === '確定收到');
   ok('確認頁：大字寫出名字與金額', (await text('#app')).includes('確定收到') && (await text('#app')).includes('8,500 元？'));
@@ -194,6 +196,10 @@ try {
   await page.waitForSelector('.thumbs img.thumb', { timeout: 10000 });
   ok('拍收據：出現縮圖', (await page.$$('.thumbs img.thumb')).length === 1);
   await nav(() => page.click('[data-act="confirm"]'));
+  // 第一次按「確定收到」就檢查：打勾動畫不能擋住底下的操作（擋住的話，下一次點格子會被吃掉、流程卡住）
+  const pe1 = await page.evaluate(() => { const c = document.querySelector('[data-celebrate]'); return c ? getComputedStyle(c).pointerEvents : 'none'; });
+  ok('打勾動畫不擋操作（第一次確定收到）', pe1 === 'none', pe1);
+  if (pe1 !== 'none') await page.waitForFunction(() => !document.querySelector('[data-celebrate]'), { timeout: 3000 });
   t = await tiles();
   ok('確定收到：那一格變「已收」', t[1].status === 'paid' && t[1].line.includes('已收'), JSON.stringify(t[1]));
   ok('確定收到：還沒傳出的變更 +1', (await settingsVal('changeSeq')) > 0);
@@ -251,6 +257,8 @@ try {
   }
   await page.evaluate(() => { document.documentElement.dataset.font = 'large'; });
   await page.setViewport({ width: 390, height: 763, deviceScaleFactor: 2, isMobile: true });
+  // Chromium 的行動模擬在切換視窗大小後會留下頁面縮放（重新載入也清不掉）；直接把縮放設回 1
+  { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }
 
   // ---- 7. 收齊 → 問一次要不要匯出 → 分享畫面 ----
   for (const label of ['2樓之1', '2樓之2', '3樓之1', '3樓之2', '4樓之1', '4樓之2', '5樓', '6樓', '7樓', '10樓']) {
@@ -258,6 +266,12 @@ try {
     await nav(() => clickText('a', '收到了'));
     await nav(() => page.click('[data-act="confirm"]'));
   }
+  const cel = await page.evaluate(() => { const c = document.querySelector('[data-celebrate]'); return c ? { pe: getComputedStyle(c).pointerEvents, text: c.textContent } : null; });
+  ok('確定收到：出現打勾動畫，寫著「收到了」和剛按的那一戶的門牌、金額', !!cel && cel.text.includes('收到了') && cel.text.includes('10樓') && cel.text.includes('6,500'), JSON.stringify(cel));
+  ok('連續按好幾戶時，打勾動畫不會疊好幾層', (await page.$$('[data-celebrate]')).length === 1);
+  ok('打勾動畫不擋操作（pointer-events: none）', !!cel && cel.pe === 'none');
+  await page.waitForFunction(() => !document.querySelector('[data-celebrate]'), { timeout: 3000 });
+  ok('打勾動畫自己消失（不用按）', true);
   ok('最後一戶收齊：問「要不要匯出一份備份」', (await page.evaluate(() => location.hash)).startsWith('#/done/') && (await text('#app')).includes('收齊了'));
   ok('收齊提示：不指定對象', !/晚輩|家人|LINE/.test(await text('#app')));
   await nav(() => clickText('a', '匯出備份'));
@@ -313,6 +327,29 @@ try {
   await nav(() => page.click('.remind'));
   await nav(() => clickText('button', '這週先不要'));
   ok('「這週先不要」：回到收租表、提醒消失', (await page.$('.remind')) === null && (await page.$$('.tile')).length === 10);
+
+  // ---- 9b. 外觀與動畫 ----
+  await nav(() => hold(3300));
+  for (const th of ['sky', 'forest', 'warm']) {
+    await nav(() => page.click(`[data-theme="${th}"]`));
+    ok(`切換外觀「${th}」：套用到整個 App，而且記住`, (await page.evaluate(() => document.documentElement.dataset.theme)) === th && (await settingsVal('theme')) === th);
+  }
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+  await nav(() => page.click('[data-act="exit"]'));
+  const rm = await page.evaluate(() => ({ page: getComputedStyle(document.querySelector('.page')).animationName, tile: getComputedStyle(document.querySelector('.tile')).transitionDuration }));
+  ok('iPhone 開了「減少動態效果」：頁面不淡入、格子按下去不縮', rm.page === 'none' && /^0s/.test(rm.tile), JSON.stringify(rm));
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
+  await reload();
+  const on = await page.evaluate(() => getComputedStyle(document.querySelector('.page')).animationName);
+  ok('對照組：沒開「減少動態效果」時有動畫', on === 'page-in', on);
+  await nav(() => hold(3300));
+  await nav(() => page.click('[data-motion="off"]'));
+  await nav(() => page.click('[data-act="exit"]'));
+  const off = await page.evaluate(() => ({ attr: document.documentElement.dataset.motion, page: getComputedStyle(document.querySelector('.page')).animationName }));
+  ok('設定裡關掉動畫：整個 App 都不動', off.attr === 'off' && off.page === 'none', JSON.stringify(off));
+  await nav(() => hold(3300));
+  await nav(() => page.click('[data-motion="auto"]'));
+  await nav(() => page.click('[data-act="exit"]'));
 
   // ---- 10. 資料被清掉 → 用備份找回 ----
   await page.evaluate(() => new Promise((res) => { const r = indexedDB.deleteDatabase('rentcheck'); r.onsuccess = r.onerror = r.onblocked = () => res(); }));

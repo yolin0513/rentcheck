@@ -19,9 +19,9 @@ export async function loadMonth(ym) {
 }
 
 /** 建出房間格（不含提醒與底部），量測「一屏放不放得下」時也用這一支 */
-export function buildTiles(cells, ym) {
+export function buildTiles(cells, ym, justChanged = null) {
   return h('div', { class: 'grid', role: 'list' }, cells.map(({ t, p, status }) =>
-    h('a', { class: `tile ${STATUS[status].cls}`, href: `#/t/${encodeURIComponent(t.id)}/${ym}`, role: 'listitem', dataset: { status, tenant: t.id } },
+    h('a', { class: `tile ${STATUS[status].cls}${t.id === justChanged ? ' just-changed' : ''}`, href: `#/t/${encodeURIComponent(t.id)}/${ym}`, role: 'listitem', dataset: { status, tenant: t.id } },
       h('span', { class: 'tile-label' }, t.label),
       t.name ? h('span', { class: 'tile-name' }, t.name) : null,   // 2026-10-07 Yolin：門牌下面加稱呼
       h('span', { class: 'tile-status' }, statusLine(status, p)))));
@@ -33,13 +33,17 @@ export function buildHeader(ym, cells) {
   const left = cells.length - paid;
   const summary = ym !== cur
     ? h('div', { class: 'summary other' }, `這是 ${monthName(ym)}的紀錄　`, h('a', { href: '#/', class: 'linkbtn' }, '回到本月'))
-    : h('div', { class: 'summary' }, left === 0 && cells.length ? '這個月全部收齊了 ✔' : `已收 ${paid} 戶　還有 ${left} 戶`);
+    : h('div', { class: 'summary' }, left === 0 && cells.length ? '這個月全部收齊了 ✔'
+      : ['已收 ', h('span', { class: 'num' }, String(paid)), ' 戶　還有 ', h('span', { class: 'num' }, String(left)), ' 戶']);
+  const pct = cells.length ? Math.round((paid / cells.length) * 100) : 0;
   return h('header', { class: 'monthbar-wrap' },
     h('div', { class: 'monthbar' },
       h('a', { class: 'navbtn', href: `#/m/${addMonths(ym, -1)}` }, '◀ 上月'),
       h('div', { class: 'monthtitle' }, h('span', { class: 'mname' }, monthName(ym)), h('span', { class: 'myear' }, `${yearOf(ym)} 年`)),
       h('a', { class: 'navbtn', href: `#/m/${addMonths(ym, 1)}` }, '下月 ▶')),
-    summary);
+    summary,
+    h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(cells.length), 'aria-valuenow': String(paid), 'aria-label': '本月已收' },
+      h('div', { class: 'progress-fill', style: `--pct:${pct}%` })));
 }
 
 /** 要不要在格子上方提醒傳備份（語氣溫和、可延 7 天、不能永久關閉） */
@@ -57,6 +61,9 @@ export function buildReminder(s) {
     s.lastBackupAt ? '好一陣子沒有匯出備份了，按這裡匯出 ›' : '還沒有匯出過備份，按這裡匯出 ›');
 }
 
+/** 剛改過狀態的那一格（只用一次：彈一下之後就清掉） */
+function takeJustChanged(ctx) { const id = ctx.state.justChanged; ctx.state.justChanged = null; return id; }
+
 export async function renderGrid(ctx) {
   const ym = ctx.state.ym;
   const { all, cells, s } = await loadMonth(ym);
@@ -67,7 +74,7 @@ export async function renderGrid(ctx) {
   add(page,
     buildHeader(ym, cells),
     needsReminder(s) ? buildReminder(s) : null,
-    cells.length ? buildTiles(cells, ym) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'),
+    cells.length ? buildTiles(cells, ym, takeJustChanged(ctx)) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'),
     h('footer', { class: 'grid-foot' },
     h('p', { class: 'muted center' }, s.lastBackupAt ? `上次匯出備份：${shortDate(isoDate(new Date(s.lastBackupAt)))}` : '還沒有匯出過備份'),
     h('a', { class: 'btn secondary small', href: '#/backup' }, '匯出備份'),

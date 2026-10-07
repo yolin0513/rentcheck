@@ -9,6 +9,7 @@ import { loadMonth, buildHeader, buildTiles, buildReminder } from './grid.js';
 import { tryPersist } from './tenant.js';
 
 const FONT_STEPS = [['normal', '標準'], ['large', '大'], ['xlarge', '特大'], ['xxlarge', '超大']];
+const THEMES = [['warm', '暖陽', '#703009'], ['sky', '晴空', '#08475c'], ['forest', '森林', '#1f4d36']];
 
 function topbar(ctx, title, back) {
   return h('div', { class: 'edit-top' },
@@ -113,6 +114,19 @@ export async function renderSettings(ctx) {
       fitBox.dataset.fits = String(f.fits);
     });
   } else fitBox.textContent = '還沒有租客，新增之後才量得出來。';
+
+  // ---- 3b. 外觀與動畫 ----
+  add(page, section('外觀',
+    h('div', { class: 'theme-row' }, THEMES.map(([k, label, color]) => h('button', {
+      type: 'button', class: 'btn ' + (s.theme === k ? '' : 'secondary'), 'aria-pressed': String(s.theme === k), dataset: { theme: k },
+      onclick: async () => { await store.setMeta('theme', k); await ctx.applyFont(); ctx.render(); },
+    }, h('span', { class: 'theme-swatch', style: `background:${color}` }), label))),
+    h('label', null, '動畫',
+      h('div', { class: 'motion-row' }, [['auto', '開（跟著 iPhone 設定）'], ['off', '關掉']].map(([k, label]) => h('button', {
+        type: 'button', class: 'btn ' + (s.motion === k ? '' : 'secondary'), 'aria-pressed': String(s.motion === k), dataset: { motion: k },
+        onclick: async () => { await store.setMeta('motion', k); await ctx.applyFont(); ctx.render(); },
+      }, label)))),
+    h('p', { class: 'muted' }, 'iPhone「設定 → 輔助使用 → 動態效果 → 減少動態效果」打開時，App 也不會有動畫。')));
 
   // ---- 4. 其他 ----
   const notes = h('textarea', { class: 'field', rows: '3', 'aria-label': '還沒收的原因選項' });

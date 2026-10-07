@@ -1,7 +1,7 @@
 // 點一格之後：這位租客這個月的頁面。步驟：'' 主頁、'confirm' 確認收款、'note' 記原因。
 
 import * as store from '../store.js';
-import { h, add, fill, topbar, toast, STATUS, statusLine } from '../ui.js';
+import { h, add, fill, topbar, toast, STATUS, statusLine, celebrate } from '../ui.js';
 import { monthName, money, shortDate, isoDate, dueDayIn, isActive, cellStatus } from '../months.js';
 import { compress } from '../photos.js';
 
@@ -28,15 +28,15 @@ export async function renderTenantPage(ctx, id, ym, step) {
   if (p && p.status === 'paid') {
     add(page,
       h('section', { class: 'card' }, who, chip,
-        h('p', { class: 'big st-text-paid' }, `已收 ${money(p.amount)} 元`),
+        h('p', { class: 'amount st-text-paid' }, `已收 ${money(p.amount)}`, h('small', null, '元')),
         h('p', { class: 'muted' }, `${shortDate(p.paidOn)} 收`),
         photoStrip(ctx, t, ym, p)),
       h('a', { class: 'btn', href: back }, '回收租表'),
-      h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.markUnpaid(t, ym); ctx.go(back); } }, '改回「沒收到」'));
+      h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.markUnpaid(t, ym); ctx.state.justChanged = t.id; ctx.go(back); } }, '改回「沒收到」'));
   } else {
     add(page,
       h('section', { class: 'card' }, who, chip,
-        h('p', { class: 'big' }, `${money(t.rent)} 元`),
+        h('p', { class: 'amount' }, money(t.rent), h('small', null, '元')),
         h('p', { class: 'muted' }, `每月 ${dueDayIn(ym, t.dueDay)} 號繳`),
         p && p.note ? h('p', { class: 'note-box' }, `還沒收的原因：${p.note}`) : null,
         p && p.photoIds && p.photoIds.length ? photoStrip(ctx, t, ym, p) : null),
@@ -92,10 +92,13 @@ function confirmPage(ctx, t, ym, p, self, who) {
     photoBtn, fileIn,
     h('button', { type: 'button', class: 'btn primary', 'data-act': 'confirm', onclick: async (e) => {
       e.currentTarget.disabled = true;
-      await store.markPaid(t, ym, { amount: amount.value || t.rent, paidOn: date.value || isoDate(), photoIds: pending.photoIds });
+      const saved = await store.markPaid(t, ym, { amount: amount.value || t.rent, paidOn: date.value || isoDate(), photoIds: pending.photoIds });
       pending.key = ''; pending.photoIds = [];
       tryPersist();
+      // 先存好、先換畫面；打勾動畫疊在上面（不擋操作、不延後結果）
+      ctx.state.justChanged = t.id;
       ctx.go(await afterPaidTarget(ym, `#/m/${ym}`));
+      celebrate('收到了！', `${t.label}${t.name ? '　' + t.name : ''}　${money(saved.amount)} 元`);
     } }, '✔ 確定收到'),
     h('a', { class: 'btn secondary', href: self }, '不是，回去'),
     h('button', { type: 'button', class: 'linkbtn', onclick: () => { more.hidden = !more.hidden; } }, '不是今天收的／金額不一樣？'),
@@ -124,7 +127,7 @@ export async function tryPersist() {
 function notePage(ctx, t, ym, p, self, who, s) {
   const ta = h('textarea', { class: 'field', rows: '3', placeholder: '也可以用鍵盤上的麥克風講', 'aria-label': '自己寫原因' });
   if (p && p.note && !s.noteOptions.includes(p.note)) ta.value = p.note;
-  const save = async (text) => { await store.setNote(t, ym, text); ctx.go(`#/m/${ym}`); };
+  const save = async (text) => { await store.setNote(t, ym, text); ctx.state.justChanged = t.id; ctx.go(`#/m/${ym}`); };
   return h('div', { class: 'page tenant-page' },
     topbar('還沒收的原因', self, '回上一頁'),
     h('section', { class: 'card' }, who, h('p', { class: 'muted' }, `${monthName(ym)}　選一個，或自己寫`)),

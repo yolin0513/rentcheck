@@ -1,6 +1,6 @@
 // 突變驗證：把程式故意改壞一處，確認「該抓到的那一條檢查」真的會紅；改壞的是暫存副本，不碰原檔。
 // 每一條都先確認改壞的那段原文確實存在（不存在＝情境沒成立，判紅，不當作通過）。
-// 用法：node scripts/mutate.mjs        （約 16 × 25 秒）
+// 用法：node scripts/mutate.mjs        （約 22 × 30 秒）
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,12 +40,24 @@ const MUTANTS = [
   // 單行比對：Windows 上的工作檔可能是 CRLF
   { file: 'js/views/grid.js', from: '  add(page,', to: '  page.append(',
     test: 'staticcheck', expect: '畫面程式沒有直接呼叫原生', why: '畫面程式改回直接呼叫原生 append' },
-  { file: 'css/app.css', from: '--muted: #454b54;', to: '--muted: #8a8a8a;',
-    test: 'staticcheck', expect: '文字與底色的對比都 ≥ 7', why: '為了好看把灰字調淡' },
+  { file: 'css/app.css', from: '--fg: #1f1a16; --muted: #574a40;', to: '--fg: #1f1a16; --muted: #8a8a8a;',
+    test: 'staticcheck', expect: '主題 warm：文字與底色的對比都 ≥ 7', why: '為了好看把灰字調淡' },
   { file: 'js/views/tenant.js', from: "topbar(`${monthName(ym)}的租金`, back)", to: 'null',
     test: 'e2e', expect: '詳情頁：最上面有標題列', why: '詳情頁拿掉標題列' },
   { file: 'css/app.css', from: '.tile-label { font-weight: 800;', to: '.tile-label { font-size: .8em; font-weight: 800;',
     test: 'e2e', expect: '放不下也不縮字', why: '為了塞進一屏把格子字縮小' },
+  { file: 'css/app.css', from: 'html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation: none !important; transition: none !important; }', to: '',
+    test: 'staticcheck', expect: '設定裡「關掉動畫」也把動畫全部關掉', why: '設定裡的「關掉動畫」不再生效' },
+  { file: 'css/app.css', from: '@media (prefers-reduced-motion: reduce) {', to: '@media (prefers-reduced-motion: no-such-thing) {',
+    test: 'e2e', expect: 'iPhone 開了「減少動態效果」', why: '不理 iPhone 的「減少動態效果」' },
+  { file: 'css/app.css', from: '  pointer-events: none; background: rgba(255, 255, 255, .55);', to: '  background: rgba(255, 255, 255, .55);',
+    test: 'e2e', expect: '打勾動畫不擋操作', why: '打勾動畫擋住底下的操作' },
+  { file: 'css/app.css', from: '.tile.just-changed { animation: tile-pop 260ms ease-out; }', to: '.tile.just-changed { animation: tile-pop 600ms ease-out; }',
+    test: 'staticcheck', expect: '時間＋延遲都 ≤ 300ms', why: '格子彈一下改成 0.6 秒' },
+  { file: 'css/app.css', from: '--hero-1: #0b3a8a; --hero-2: #08475c;', to: '--hero-1: #0b3a8a; --hero-2: #2a7fa0;',
+    test: 'staticcheck', expect: '主題 sky：文字與底色的對比都 ≥ 7', why: '為了好看把晴空的頁首調亮' },
+  { file: 'js/ui.js', from: "  document.querySelectorAll('[data-celebrate]').forEach((x) => x.remove());", to: '',
+    test: 'e2e', expect: '連續按好幾戶時，打勾動畫不會疊好幾層', why: '打勾動畫疊好幾層（最上面是前一戶）' },
 ];
 
 function copyTree(src, dst) {

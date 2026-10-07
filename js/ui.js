@@ -96,6 +96,30 @@ export function holdButton(label, ms, onDone, onShort) {
   return btn;
 }
 
+/**
+ * 「確定收到」那一刻的打勾動畫：疊在收租表上、pointer-events: none，不擋任何操作。
+ * 呼叫的時候資料已經存好、畫面已經換好——動畫只是回饋，不是關卡。
+ * 每段動畫 ≤ 300ms（CSS）；關掉動畫時（iOS「減少動態效果」或設定裡關掉）一樣顯示，只是不動。
+ */
+export function celebrate(title, sub) {
+  // 連續按好幾戶時，舊的那一個先拿掉——不然最上面看到的是「前一戶」（2026-10-07 端對端測試抓到）
+  document.querySelectorAll('[data-celebrate]').forEach((x) => x.remove());
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 52 52');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(svgNS, 'path');
+  path.setAttribute('class', 'cel-check');
+  path.setAttribute('d', 'M14 27 L23 36 L39 18');
+  svg.appendChild(path);
+  const ov = h('div', { class: 'celebrate', role: 'status', 'aria-live': 'polite', 'data-celebrate': '' },
+    h('div', { class: 'cel-card' }, h('div', { class: 'cel-ring' }, svg), h('div', { class: 'cel-title' }, title), sub ? h('div', { class: 'cel-sub' }, sub) : null));
+  add(document.body, ov);
+  setTimeout(() => ov.classList.add('out'), 900);
+  setTimeout(() => ov.remove(), 1200);
+  return ov;
+}
+
 /** 畫面底部短暫顯示一行字（給設定頁用；主要流程不依賴它） */
 export function toast(msg, ms = 2500) {
   const t = h('div', { class: 'toast', role: 'status' }, msg);

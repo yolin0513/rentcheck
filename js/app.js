@@ -23,6 +23,7 @@ export const state = {
   editTimer: null,
   preview: false,
   standalone: false,
+  justChanged: null,   // 剛改過狀態的那一格（回到收租表時彈一下）
 };
 
 export function isStandalone() {
@@ -59,8 +60,11 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- 字的大小 ----------
 export async function applyFont(step) {
-  const s = step || (await store.settings()).fontStep;
-  document.documentElement.dataset.font = s;
+  const s = await store.settings();
+  const root = document.documentElement;
+  root.dataset.font = step || s.fontStep;
+  root.dataset.theme = s.theme;
+  root.dataset.motion = s.motion;
 }
 
 // ---------- 路由 ----------

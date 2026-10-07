@@ -7,6 +7,8 @@ import { naturalCompare, isoDate, autoLabels } from './months.js';
 
 export const DEFAULTS = {
   fontStep: 'large',
+  theme: 'warm',          // 外觀：warm（暖陽）／sky（晴空）／forest（森林）
+  motion: 'auto',         // 動畫：auto（跟著 iPhone 的「減少動態效果」）／off（關掉）
   noteOptions: ['說晚點給', '分次給', '聯絡不到', '其他'],
   changeSeq: 0,
   backedUpSeq: 0,
@@ -23,7 +25,7 @@ export const DEFAULTS = {
   restoredAt: null,
 };
 // 會跟著備份走的設定（其餘是這支手機自己的狀態）
-export const PORTABLE_META = ['fontStep', 'noteOptions', 'screenSig'];
+export const PORTABLE_META = ['fontStep', 'theme', 'motion', 'noteOptions', 'screenSig'];
 
 const nowISO = () => new Date().toISOString();
 export function uid() {

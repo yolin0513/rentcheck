@@ -54,26 +54,47 @@ const nativeHits = appFiles.filter((f) => !f.endsWith(path.join('js', 'ui.js')))
 });
 ok('畫面程式沒有直接呼叫原生 append／prepend／replaceChildren／innerHTML（ui.js 以外）', nativeHits.length === 0, nativeHits.join(', '));
 
-// ---- 2c. 文字與底色的對比 ≥ 7：1（WCAG AAA）——變好看不能變難讀 ----
+// ---- 2c. 每一套主題：文字與底色的對比 ≥ 7：1（WCAG AAA）——好看不能換掉看得清楚 ----
 const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8');
-const vars = Object.fromEntries([...css.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
 const lum = (hex) => {
   const c = hex.slice(1).match(/../g).map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+// 半透明白（例如頁首返回鍵的 12% 白底）疊在某個顏色上之後的顏色
+const blendWhite = (hex, alpha) => '#' + hex.slice(1).match(/../g).map((x) => Math.round(parseInt(x, 16) * (1 - alpha) + 255 * alpha).toString(16).padStart(2, '0')).join('');
 ok('對照組：對比檢查抓得到 #777777 對白底（約 4.5：1）', ratio('#777777', '#ffffff') < 7);
+const themeBlocks = [...css.matchAll(/(?:^|\n)((?::root, )?html\[data-theme="(\w+)"\])\s*\{([^}]*)\}/g)].map((m) => [m[2], Object.fromEntries([...m[3].matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((x) => [x[1], x[2]]))]);
+ok('讀得到三套主題（warm、sky、forest）', themeBlocks.map((t) => t[0]).join(',') === 'warm,sky,forest', themeBlocks.map((t) => t[0]).join(','));
+const ST = ['paid', 'note', 'due', 'not'];
 const PAIRS = [
-  ['fg', 'bg'], ['fg', 'surface'], ['muted', 'surface'], ['muted', 'bg'], ['brand-ink', 'surface'], ['brand-fg', 'brand'],
-  ['paid-fg', 'paid-bg'], ['note-fg', 'note-bg'], ['due-fg', 'due-bg'], ['not-fg', 'not-bg'],
-  ['fg', 'paid-bg'], ['fg', 'note-bg'], ['fg', 'due-bg'], ['fg', 'not-bg'],
-  ['bad', 'bad-bg'], ['bad', 'surface'], ['ok', 'surface'], ['warn-fg', 'warn-bg'],
+  ['fg', 'bg'], ['fg', 'bg2'], ['fg', 'surface'], ['fg', 'surface-2'], ['muted', 'surface'], ['muted', 'bg'], ['muted', 'bg2'],
+  ['brand-ink', 'surface'], ['brand-fg', 'brand'], ['brand-fg', 'brand-2'],
+  ['hero-fg', 'hero-1'], ['hero-fg', 'hero-2'], ['hero-sub', 'hero-1'], ['hero-sub', 'hero-2'],
+  ...ST.flatMap((x) => [[`${x}-fg`, `${x}-bg`], [`${x}-fg`, 'surface'], ['fg', `${x}-bg`]]),
+  ['bad', 'bad-bg'], ['bad', 'surface'], ['ok', 'surface'], ['warn-fg', 'warn-bg'], ['paid-fg', 'surface'],
 ];
-const low = PAIRS.filter(([a, b]) => !vars[a] || !vars[b] || ratio(vars[a], vars[b]) < 7).map(([a, b]) => `${a}/${b}${vars[a] && vars[b] ? ' ' + ratio(vars[a], vars[b]).toFixed(1) : '（變數不存在）'}`);
-const minPair = PAIRS.filter(([a, b]) => vars[a] && vars[b]).map(([a, b]) => ratio(vars[a], vars[b])).sort((x, y) => x - y)[0];
-ok(`文字與底色的對比都 ≥ 7：1（${PAIRS.length} 組，最低 ${minPair ? minPair.toFixed(1) : '—'}：1）`, low.length === 0, low.join('; '));
-// 白字放在深色底上的兩處（設定頁首、預覽警告條）
-ok('白字對設定頁首、預覽警告條 ≥ 7：1', ratio('#ffffff', vars.edit) >= 7 && ratio('#ffffff', vars.bad) >= 7, `${ratio('#ffffff', vars.edit).toFixed(1)} / ${ratio('#ffffff', vars.bad).toFixed(1)}`);
+for (const [name, v] of themeBlocks) {
+  const all = PAIRS.map(([a, b]) => [a, b, v[a] && v[b] ? ratio(v[a], v[b]) : 0]);
+  // 頁首的返回鍵／上下月按鈕：白字放在「12% 白疊在頁首色上」
+  all.push(['hero-fg', 'hero-2＋12%白', ratio(v['hero-fg'], blendWhite(v['hero-2'], 0.12))], ['hero-fg', 'hero-1＋12%白', ratio(v['hero-fg'], blendWhite(v['hero-1'], 0.12))]);
+  all.push(['白字', 'edit-1', ratio('#ffffff', v['edit-1'])], ['白字', 'edit-2', ratio('#ffffff', v['edit-2'])], ['白字', 'bad', ratio('#ffffff', v.bad)]);
+  const low = all.filter((x) => x[2] < 7).map(([a, b, r]) => `${a}/${b} ${r ? r.toFixed(1) : '（變數不存在）'}`);
+  const min = Math.min(...all.map((x) => x[2]));
+  ok(`主題 ${name}：文字與底色的對比都 ≥ 7：1（${all.length} 組，最低 ${min.toFixed(1)}：1）`, low.length === 0, low.join('; '));
+}
+
+// ---- 2d. 動畫：每一段（時間＋延遲）≤ 300ms；而且「減少動態效果」與設定裡的「關掉」都會把動畫全部關掉 ----
+const ANIM = /(?:animation|transition)\s*:[^;]*/g;
+const msOf = (t) => (t.endsWith('ms') ? parseFloat(t) : parseFloat(t) * 1000);
+const durations = (decl) => decl.split(',').map((part) => { const ts = part.match(/\d*\.?\d+m?s\b/g) || []; return ts.map(msOf).reduce((a, b) => a + b, 0); });
+ok('對照組：抓得到 400ms 的動畫', Math.max(...durations('animation: x 400ms ease')) > 300);
+ok('對照組：時間加延遲也算（200ms＋150ms）', Math.max(...durations('animation: x 200ms ease 150ms')) > 300);
+const animDecls = [...css.matchAll(ANIM)].map((m) => m[0]).filter((d) => !/none\s*!important/.test(d));
+const tooLong = animDecls.filter((d) => Math.max(...durations(d)) > 300);
+ok(`所有動畫（${animDecls.length} 處）時間＋延遲都 ≤ 300ms`, tooLong.length === 0, tooLong.join(' | '));
+ok('有「減少動態效果」的規則，並且把動畫全部關掉', /@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none !important; transition: none !important;/.test(css));
+ok('設定裡「關掉動畫」也把動畫全部關掉', /html\[data-motion="off"\] \*[^{]*\{ animation: none !important; transition: none !important; \}/.test(css));
 
 // ---- 3. Service Worker 預快取清單與版本 ----
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
