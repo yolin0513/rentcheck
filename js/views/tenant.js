@@ -1,7 +1,7 @@
 // 點一格之後：這位租客這個月的頁面。步驟：'' 主頁、'confirm' 確認收款、'note' 記原因。
 
 import * as store from '../store.js';
-import { h, add, fill, topbar, toast, STATUS, statusLine, celebrate } from '../ui.js';
+import { h, add, fill, topbar, toast, STATUS, statusLine, celebrate, backButton } from '../ui.js';
 import { monthName, money, shortDate, isoDate, dueDayIn, isActive, cellStatus } from '../months.js';
 import { compress } from '../photos.js';
 
@@ -18,6 +18,9 @@ export async function renderTenantPage(ctx, id, ym, step) {
   const back = `#/m/${ym}`;
   const self = `#/t/${encodeURIComponent(t.id)}/${ym}`;
   const who = h('div', { class: 'who' }, h('div', { class: 'who-label' }, t.label), t.name ? h('div', { class: 'who-name' }, t.name) : null);
+  // 電話：門牌、稱呼下面，按了直接撥（2026-10-07 Yolin：發現「還沒收」最自然的下一步就是打電話）。沒填就整塊不顯示
+  const digits = String(t.phone || '').replace(/[^\d+]/g, '');
+  const phone = digits.length >= 3 ? h('a', { class: 'phone', href: `tel:${digits}`, 'data-act': 'call' }, '📞 打電話　', h('span', { class: 'num' }, t.phone)) : null;
 
   if (step === 'confirm') return confirmPage(ctx, t, ym, p, self, who);
   if (step === 'note') return notePage(ctx, t, ym, p, self, who, s);
@@ -27,22 +30,23 @@ export async function renderTenantPage(ctx, id, ym, step) {
   const page = h('div', { class: 'page tenant-page' }, topbar(`${monthName(ym)}的租金`, back));
   if (p && p.status === 'paid') {
     add(page,
-      h('section', { class: 'card' }, who, chip,
+      h('section', { class: 'card' }, who, phone, chip,
         h('p', { class: 'amount st-text-paid' }, `已收 ${money(p.amount)}`, h('small', null, '元')),
         h('p', { class: 'muted' }, `${shortDate(p.paidOn)} 收`),
         photoStrip(ctx, t, ym, p)),
-      h('a', { class: 'btn', href: back }, '回收租表'),
-      h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.markUnpaid(t, ym); ctx.state.justChanged = t.id; ctx.go(back); } }, '改回「沒收到」'));
+      // 已收的頁沒有主要動作：「改回沒收到」用次要樣式，返回在最下面
+      h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.markUnpaid(t, ym); ctx.state.justChanged = t.id; ctx.go(back); } }, '改回「沒收到」'),
+      backButton(back, '回收租表'));
   } else {
     add(page,
-      h('section', { class: 'card' }, who, chip,
+      h('section', { class: 'card' }, who, phone, chip,
         h('p', { class: 'amount' }, money(t.rent), h('small', null, '元')),
         h('p', { class: 'muted' }, `每月 ${dueDayIn(ym, t.dueDay)} 號繳`),
         p && p.note ? h('p', { class: 'note-box' }, `還沒收的原因：${p.note}`) : null,
         p && p.photoIds && p.photoIds.length ? photoStrip(ctx, t, ym, p) : null),
       h('a', { class: 'btn primary', href: `${self}/confirm` }, '✔ 收到了'),
       h('a', { class: 'btn secondary', href: `${self}/note` }, p && p.note ? '改還沒收的原因' : '還沒收，記個原因'),
-      h('a', { class: 'btn secondary', href: back }, '回收租表'));
+      backButton(back, '回收租表'));
   }
   return page;
 }
@@ -100,9 +104,9 @@ function confirmPage(ctx, t, ym, p, self, who) {
       ctx.go(await afterPaidTarget(ym, `#/m/${ym}`));
       celebrate('收到了！', `${t.label}${t.name ? '　' + t.name : ''}　${money(saved.amount)} 元`);
     } }, '✔ 確定收到'),
-    h('a', { class: 'btn secondary', href: self }, '不是，回去'),
     h('button', { type: 'button', class: 'linkbtn', onclick: () => { more.hidden = !more.hidden; } }, '不是今天收的／金額不一樣？'),
-    more);
+    more,
+    backButton(self, '不是，回上一頁'));
 }
 
 /** 這個月剛好全部收齊、而且還有沒匯出的紀錄 → 問一次要不要匯出備份 */
@@ -135,7 +139,7 @@ function notePage(ctx, t, ym, p, self, who, s) {
     ta,
     h('button', { type: 'button', class: 'btn', onclick: () => save(ta.value) }, '存起來'),
     p && p.note ? h('button', { type: 'button', class: 'btn secondary', onclick: () => save('') }, '不用了，清掉原因') : null,
-    h('a', { class: 'btn secondary', href: self }, '回上一頁'));
+    backButton(self, '回上一頁'));
 }
 
 function photoStrip(ctx, t, ym, p) {

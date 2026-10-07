@@ -1,6 +1,6 @@
 // 突變驗證：把程式故意改壞一處，確認「該抓到的那一條檢查」真的會紅；改壞的是暫存副本，不碰原檔。
 // 每一條都先確認改壞的那段原文確實存在（不存在＝情境沒成立，判紅，不當作通過）。
-// 用法：node scripts/mutate.mjs        （約 22 × 30 秒）
+// 用法：node scripts/mutate.mjs        （約 28 × 35 秒）
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -58,6 +58,22 @@ const MUTANTS = [
     test: 'staticcheck', expect: '主題 sky：文字與底色的對比都 ≥ 7', why: '為了好看把晴空的頁首調亮' },
   { file: 'js/ui.js', from: "  document.querySelectorAll('[data-celebrate]').forEach((x) => x.remove());", to: '',
     test: 'e2e', expect: '連續按好幾戶時，打勾動畫不會疊好幾層', why: '打勾動畫疊好幾層（最上面是前一戶）' },
+  { file: 'js/ui.js', from: "    return Array.from(note).length <= NOTE_MAX_ON_TILE ? `${s.icon} ${note}` : `${s.icon} 看原因`;", to: "    return `${s.icon} ${Array.from(note).slice(0, 3).join('')}`;",
+    test: 'unittest', expect: '短的原因整句顯示：「說晚點給」', why: '原因改回只取前三個字（實機看到的「說晚點」）' },
+  { file: 'js/ui.js', from: "  return h('a', { class: 'btn back', href, 'data-act': 'bottom-back' }, '‹ ', label);", to: "  return h('a', { class: 'btn', href, 'data-act': 'bottom-back' }, '‹ ', label);",
+    test: 'e2e', expect: '「回收租表／回上一頁／回設定」都不是主按鈕', why: '返回鍵做成主按鈕樣式' },
+  { file: 'css/app.css', from: '  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;', to: '  position: static; left: 0; right: 0; bottom: 0; z-index: 5;',
+    test: 'e2e', expect: '固定在最下面，捲動之後也在', why: '底部那一條不固定' },
+  { file: 'css/app.css', from: '.grid-page { padding-bottom: calc(var(--footbar-h) + 16px); }', to: '.grid-page { padding-bottom: 16px; }',
+    test: 'e2e', expect: '捲到底時最後一列完整看得到', why: '房間格下面沒留底部那一條的高度（最後一列被蓋住）' },
+  { file: 'css/app.css', from: '  margin: 0 -16px 10px; padding: calc(var(--safe-top) + 14px) 16px 8px;', to: '  margin: 0 -16px 10px; padding: 4px 16px 8px;',
+    test: 'e2e', expect: '頁首的月份離狀態列至少 10 點', why: '頁首沒留狀態列的空間（黏在一起）' },
+  { file: 'js/views/tenant.js', from: "  const phone = digits.length >= 3 ? h('a',", to: "  const phone = true ? h('a',",
+    test: 'e2e', expect: '沒填電話的租客：不顯示電話那一塊', why: '沒填電話也顯示電話那一塊' },
+  { file: 'css/app.css', from: '.phone .num { white-space: nowrap; }', to: '.phone .num { }',
+    test: 'e2e', expect: '電話號碼不從中間斷開', why: '電話號碼可以從中間斷行（實際截圖看到的 0900-000- ／ 111）' },
+  { file: 'css/app.css', from: 'max-width: 100%; min-height: 48px; margin: .3rem 0 .1rem; padding: .15em .6em;', to: 'min-height: 48px; margin: .3rem 0 .1rem; padding: 0 .9em;',
+    test: 'e2e', expect: '電話鍵在卡片裡面', why: '電話鍵在最窄＋最大字時凸出卡片（量出來的 6 點）' },
 ];
 
 function copyTree(src, dst) {
@@ -70,7 +86,10 @@ function copyTree(src, dst) {
 }
 
 let bad = 0;
+// 只跑指定的幾條：node scripts/mutate.mjs 29,30（從 1 開始數）；不給就全部跑
+const ONLY = (process.argv[2] || '').split(',').filter(Boolean).map(Number);
 for (const [i, m] of MUTANTS.entries()) {
+  if (ONLY.length && !ONLY.includes(i + 1)) continue;
   fs.rmSync(WORK, { recursive: true, force: true });
   copyTree(ROOT, WORK);
   const f = path.join(WORK, m.file);
@@ -84,5 +103,8 @@ for (const [i, m] of MUTANTS.entries()) {
   if (!caught) { bad++; console.log(out.split('\n').filter((l) => l.startsWith('FAIL')).slice(0, 5).join('\n')); }
 }
 fs.rmSync(WORK, { recursive: true, force: true });
-console.log(bad ? `\n${bad} 條突變沒被抓到` : `\n${MUTANTS.length} 條突變全部被抓到`);
+// 只跑一部分時照實寫跑了幾條——「全部被抓到」只能在真的全部跑過時說
+const ran = ONLY.length ? ONLY.length : MUTANTS.length;
+console.log(bad ? `\n${bad} 條突變沒被抓到（這次跑了 ${ran}／${MUTANTS.length} 條）`
+  : ONLY.length ? `\n這次跑的 ${ran} 條突變都被抓到（共 ${MUTANTS.length} 條，其餘這次沒跑）` : `\n${MUTANTS.length} 條突變全部被抓到`);
 process.exit(bad ? 1 : 0);

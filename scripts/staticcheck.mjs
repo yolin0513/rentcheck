@@ -73,6 +73,7 @@ const PAIRS = [
   ['hero-fg', 'hero-1'], ['hero-fg', 'hero-2'], ['hero-sub', 'hero-1'], ['hero-sub', 'hero-2'],
   ...ST.flatMap((x) => [[`${x}-fg`, `${x}-bg`], [`${x}-fg`, 'surface'], ['fg', `${x}-bg`]]),
   ['bad', 'bad-bg'], ['bad', 'surface'], ['ok', 'surface'], ['warn-fg', 'warn-bg'], ['paid-fg', 'surface'],
+  ['brand-ink', 'brand-soft'], ['brand-ink', 'surface-2'],   // 電話鍵、返回鍵
 ];
 for (const [name, v] of themeBlocks) {
   const all = PAIRS.map(([a, b]) => [a, b, v[a] && v[b] ? ratio(v[a], v[b]) : 0]);

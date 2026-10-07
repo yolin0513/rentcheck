@@ -37,6 +37,15 @@ await page.evaluateOnNewDocument(() => {
   // 畫面上出現 null／undefined／NaN 的文字，任何時候都記下來（2026-10-07 實機出現「nullnull」，76 項測試沒抓到）。
   // 不用單字邊界：「nullnull」用 \bnull\b 抓不到。
   window.__garbage = [];
+  // 返回類的按鈕（文字是「回收租表／回上一頁／回設定」）只能是返回樣式，不能是主按鈕
+  window.__backPrimary = [];
+  const checkBack = (root) => {
+    if (root.nodeType !== 1) return;
+    root.querySelectorAll('.btn').forEach((b) => {
+      if (/回(收租表|上一頁|設定)/.test(b.textContent) && !b.classList.contains('back')) window.__backPrimary.push(`${location.hash || '#/'}｜${b.textContent.trim()}｜${b.className}`);
+    });
+  };
+  new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach(checkBack); }).observe(document, { subtree: true, childList: true });
   const GARBAGE = /null|undefined|NaN/;
   const scan = (n) => {
     const t = n.nodeType === 3 ? n.textContent : (n.nodeType === 1 ? n.textContent : '');
@@ -123,6 +132,7 @@ try {
     await page.type('input[name="address"]', `中山路12號${f}`);
     await page.type('input[name="name"]', `測試戶${i + 1}`);
     await page.type('input[name="rent"]', String(6000 + i * 500));
+    if (i === 0) await page.type('input[name="phone"]', '0900-000-111');   // 合成的號碼（只有第一戶有電話）
     await page.$eval('input[name="dueDay"]', (e, v) => { e.value = v; }, String(i % 2 ? 5 : 20)); // 一半 5 號、一半 20 號
     await nav(() => page.click('[data-act="save-tenant"]'));
   }
@@ -168,7 +178,7 @@ try {
 
   // ---- 5. 確認收款、改回、記原因 ----
   const tileOf = (label) => page.$$eval('.tile', (els, l) => els.findIndex((e) => e.querySelector('.tile-label').textContent === l), label);
-  const openTile = async (label) => { const i = await tileOf(label); await nav(async () => (await page.$$('.tile'))[i].click()); };
+  const openTile = async (label) => { const i = await tileOf(label); await page.evaluate((i) => document.querySelectorAll('.tile')[i].scrollIntoView({ block: 'center' }), i); await nav(async () => (await page.$$('.tile'))[i].click()); };   // 先捲到中間：最下面那一條會蓋住底部的格子
   await openTile('2樓之2');
   // 2樓之2 是第 6 戶（index 5）：月租 6000+5×500＝8,500、5 號繳
   const tb = await page.evaluate(() => { const b = document.querySelector('.topbar'); const k = b && b.querySelector('.backbtn'); const r = b && b.getBoundingClientRect(); return b ? { back: k ? k.textContent : '', title: b.querySelector('.topbar-title').textContent, top: r.top, h: r.height, backH: k ? k.getBoundingClientRect().height : 0 } : null; });
@@ -209,7 +219,9 @@ try {
   ok('照片是 JPEG、1024×768', ph.type === 'image/jpeg' && ph.w === 1024 && ph.h === 768, JSON.stringify(ph));
 
   await openTile('2樓之2');
-  ok('已收的頁面：第二顆才是「改回沒收到」', (await page.$$eval('.tenant-page .btn', (b) => b.map((x) => x.textContent)))[1].includes('改回'));
+  const paidBtns = await page.$$eval('.tenant-page .btn', (b) => b.map((x) => ({ text: x.textContent, cls: x.className })));
+  ok('已收的頁面：沒有主按鈕，「改回沒收到」是次要樣式', paidBtns[0].text.includes('改回') && paidBtns[0].cls.includes('secondary') && !paidBtns.some((x) => !/secondary|back/.test(x.cls)), JSON.stringify(paidBtns));
+  ok('已收的頁面：返回在最下面、是返回樣式（不是主按鈕）', paidBtns.at(-1).cls.includes('back') && paidBtns.at(-1).text.includes('回收租表'));
   await nav(() => clickText('button', '改回'));
   t = await tiles();
   ok('改回沒收到：那一格回到「該收了」', t[1].status === 'due', JSON.stringify(t[1]));
@@ -218,34 +230,72 @@ try {
   await nav(() => clickText('a', '記個原因'));
   await nav(() => clickText('button', '說晚點給'));
   t = await tiles();
-  ok('記原因：那一格變黃、顯示原因前三個字', t[0].status === 'note' && t[0].line === '！ 說晚點', JSON.stringify(t[0]));
+  ok('記原因：那一格變黃、整句顯示「說晚點給」（不是半句）', t[0].status === 'note' && t[0].line === '！ 說晚點給', JSON.stringify(t[0]));
+  await openTile('3樓之1');
+  await nav(() => clickText('a', '記個原因'));
+  await page.type('textarea', '下個月十號跟下下個月一起給');
+  await nav(() => clickText('button', '存起來'));
+  t = await tiles();
+  ok('長的原因：格子上不顯示半句，顯示「看原因」', t[2].line === '！ 看原因', JSON.stringify(t[2]));
+  await openTile('3樓之1');
+  ok('長的原因：點進去看得到完整的原因', (await text('.note-box')).includes('下個月十號跟下下個月一起給'));
+  await nav(() => clickText('a', '回收租表'));
 
   // ---- 6. 版面：字放大、畫面變窄都不壞 ----
   // 加了稱呼之後每格三行：照實量每一種寬高×字級，列成表（INFO）；斷言的是「放不下就捲、不縮字、不裁字」
-  const SIZES = [[390, 763, 'iPhone 12'], [320, 626, 'iPhone 12 開縮放'], [320, 548, 'SE 開縮放']];
+  // 真機的整個螢幕大小（主畫面 App 的內容延伸到狀態列後面），加上狀態列／底部橫條的高度（--safe-top／--safe-bottom 模擬 env()）
+  const SIZES = [[390, 844, 47, 34, 'iPhone 12'], [320, 693, 39, 28, 'iPhone 12 開縮放'], [320, 568, 20, 0, 'SE 開縮放']];
   const ROOT_PX = { normal: 18, large: 22, xlarge: 26, xxlarge: 30 };
-  for (const [w, hgt, dev] of SIZES) {
+  const notesById = await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('rentcheck'); r.onsuccess = () => { const q = r.result.transaction('payments').objectStore('payments').getAll(); q.onsuccess = () => { res(Object.fromEntries(q.result.map((x) => [x.tenantId, x.note || '']))); r.result.close(); }; }; }));
+  for (const [w, hgt, st, sb, dev] of SIZES) {
     const row = [];
     for (const font of ['normal', 'large', 'xlarge', 'xxlarge']) {
       await page.setViewport({ width: w, height: hgt, deviceScaleFactor: 2, isMobile: true });
-      await page.evaluate((f) => { document.documentElement.dataset.font = f; }, font);
-      await new Promise((r) => setTimeout(r, 50));
-      const m = await page.evaluate(() => {
+      await page.evaluate((f, st, sb) => {
+        document.querySelector('.preview-banner')?.remove();   // 主畫面 App 沒有這條
+        document.documentElement.dataset.font = f;
+        document.documentElement.style.setProperty('--safe-top', `${st}px`);
+        document.documentElement.style.setProperty('--safe-bottom', `${sb}px`);
+        window.scrollTo(0, 0);
+      }, font, st, sb);
+      await new Promise((r) => setTimeout(r, 150));   // 等底部那一條的高度回報（ResizeObserver）
+      const m = await page.evaluate((st, notes) => {
         const ts = [...document.querySelectorAll('.tile')];
+        const bar = document.querySelector('[data-footbar]').getBoundingClientRect();
+        const title = document.querySelector('.mname').getBoundingClientRect();
         const last = ts[ts.length - 1].getBoundingClientRect();
-        const clipped = ts.some((e) => [...e.children].some((c) => c.scrollWidth > c.clientWidth + 1));
+        // 字被裁＝橫向溢出框外，或框會裁切（overflow 不是 visible）而內容比框大；另外每一行字都不能超出格子本身。
+        // （中文字形本身會比行高多 1～2 點，overflow 是 visible 時不會被切掉——那不算。）
+        const clipped = ts.some((e) => {
+          const tr = e.getBoundingClientRect();
+          return [...e.children].some((c) => {
+            const cs = getComputedStyle(c), r = c.getBoundingClientRect();
+            const cuts = cs.overflowX !== 'visible' || cs.overflowY !== 'visible' || cs.textOverflow !== 'clip';
+            return c.scrollWidth > c.clientWidth + 1 || (cuts && c.scrollHeight > c.clientHeight + 1) || r.right > tr.right + 1 || r.bottom > tr.bottom + 1;
+          });
+        });
         const fontPx = parseFloat(getComputedStyle(ts[0].querySelector('.tile-label')).fontSize);
         const nameShown = ts.every((e) => e.querySelector('.tile-name'));
-        return { bottom: Math.round(last.bottom + scrollY), h: innerHeight, clipped, fontPx, nameShown, hs: document.documentElement.scrollWidth <= innerWidth + 1 };
-      });
-      const banner = await page.evaluate(() => { const b = document.querySelector('.preview-banner'); return b ? b.getBoundingClientRect().height : 0; });
-      const bottom = m.bottom - banner;
-      row.push(`${font} ${bottom}${bottom <= m.h ? '✔' : '✘'}`);
-      ok(`${w}×${hgt}・${font}：格子裡有稱呼、沒有橫向捲動、字沒被裁`, m.nameShown && m.hs && !m.clipped);
-      ok(`${w}×${hgt}・${font}：放不下也不縮字（格子字級＝${ROOT_PX[font]}px）`, Math.abs(m.fontPx - ROOT_PX[font]) < 0.5, `${m.fontPx}px`);
+        // 有原因的格子：顯示的要嘛是整句原因、要嘛是「沒收（看原因）」——不能是半句
+        const badNotes = ts.filter((e) => e.dataset.status === 'note').map((e) => [notes[e.dataset.tenant], e.querySelector('.tile-status').textContent])
+          .filter(([n, shown]) => shown !== `！ ${n}` && shown !== '！ 看原因');
+        const res = { titleGap: Math.round(title.top - st), barBottom: Math.round(bar.bottom), barH: Math.round(bar.height), lastBottom: Math.round(last.bottom), h: innerHeight, clipped, fontPx, nameShown, badNotes, hs: document.documentElement.scrollWidth <= innerWidth + 1 };
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        return res;
+      }, st, notesById);
+      await new Promise((r) => setTimeout(r, 50));
+      const end = await page.evaluate(() => { const ts = [...document.querySelectorAll('.tile')]; return { last: ts[ts.length - 1].getBoundingClientRect().bottom, barTop: document.querySelector('[data-footbar]').getBoundingClientRect().top, barBottom: document.querySelector('[data-footbar]').getBoundingClientRect().bottom }; });
+      const fits = m.lastBottom <= m.h - m.barH;
+      row.push(`${font} ${m.lastBottom}／${m.h - m.barH}${fits ? '✔' : '✘'}`);
+      ok(`${dev}・${font}：格子裡有稱呼、沒有橫向捲動、字沒被裁、原因沒有半句`, m.nameShown && m.hs && !m.clipped && m.badNotes.length === 0, JSON.stringify(m.badNotes));
+      ok(`${dev}・${font}：放不下也不縮字（格子字級＝${ROOT_PX[font]}px）`, Math.abs(m.fontPx - ROOT_PX[font]) < 0.5, `${m.fontPx}px`);
+      ok(`${dev}・${font}：頁首的月份離狀態列至少 10 點（不黏在一起）`, m.titleGap >= 10, `${m.titleGap}`);
+      ok(`${dev}・${font}：「匯出備份／設定」固定在最下面，捲動之後也在`, m.barBottom === m.h && Math.round(end.barBottom) === m.h);
+      ok(`${dev}・${font}：捲到底時最後一列完整看得到（在底部那一條上面）`, end.last <= end.barTop + 1, `最後一格底 ${Math.round(end.last)}／底部那一條頂 ${Math.round(end.barTop)}`);
     }
-    results.push(`INFO 一屏量測 ${dev}（${w}×${hgt}，可用 ${hgt}）：最後一格的底 ${row.join('｜')}`);
+    results.push(`INFO 一屏量測 ${dev}（${w}×${hgt}，狀態列 ${st}、底部橫條 ${sb}）：最後一格的底／可用（扣掉底部那一條）${row.join('｜')}`);
   }
+  await page.evaluate(() => { document.documentElement.style.removeProperty('--safe-top'); document.documentElement.style.removeProperty('--safe-bottom'); window.scrollTo(0, 0); });
   await page.setViewport({ width: 320, height: 626, deviceScaleFactor: 2, isMobile: true });
   for (const font of ['normal', 'large', 'xlarge', 'xxlarge']) {
     await page.evaluate((f) => { document.documentElement.dataset.font = f; }, font);
@@ -259,6 +309,28 @@ try {
   await page.setViewport({ width: 390, height: 763, deviceScaleFactor: 2, isMobile: true });
   // Chromium 的行動模擬在切換視窗大小後會留下頁面縮放（重新載入也清不掉）；直接把縮放設回 1
   { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }
+
+  // ---- 6b. 電話（第一個新增的租客「3樓之2」有填電話） ----
+  await openTile('3樓之2');
+  const tel = await page.evaluate(() => { const a = document.querySelector('a.phone'); return a ? { href: a.getAttribute('href'), text: a.textContent } : null; });
+  ok('有填電話的租客：詳情頁有「打電話」，按了直接撥（tel:）', !!tel && tel.href === 'tel:0900000111' && tel.text.includes('0900-000-111'), JSON.stringify(tel));
+  // 最容易斷開的情況：最窄（320）＋最大字（超大）。號碼要在同一行，整顆電話鍵要在卡片裡面
+  await page.setViewport({ width: 320, height: 626, deviceScaleFactor: 2, isMobile: true });
+  await page.evaluate(() => { document.documentElement.dataset.font = 'xxlarge'; });
+  await new Promise((r) => setTimeout(r, 100));
+  const telBox = await page.evaluate(() => { const n = document.querySelector('a.phone .num'); const a = n.closest('a.phone'); const c = n.closest('.card'); const r = document.createRange(); r.selectNodeContents(n); return { lines: new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size, inCard: a.getBoundingClientRect().right <= c.getBoundingClientRect().right + 0.5 }; });
+  ok('320 寬＋超大字：電話鍵在卡片裡面（不凸出去）', telBox.inCard, JSON.stringify(telBox));
+  const telLines = telBox.lines;
+  await page.evaluate(() => { document.documentElement.dataset.font = 'large'; });
+  await page.setViewport({ width: 390, height: 763, deviceScaleFactor: 2, isMobile: true });
+  { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }
+  ok('電話號碼不從中間斷開（整個號碼在同一行）', telLines === 1, String(telLines));
+  await nav(() => clickText('a', '回收租表'));
+  await openTile('2樓之2');
+  ok('沒填電話的租客：不顯示電話那一塊', (await page.$('a.phone')) === null && !(await text('#app')).includes('打電話'));
+  const unpaidBtns = await page.$$eval('.tenant-page .btn', (b) => b.map((x) => ({ text: x.textContent, cls: x.className })));
+  ok('該收的頁面：主按鈕是「收到了」、返回在最下面而且是返回樣式', unpaidBtns[0].text.includes('收到了') && !/secondary|back/.test(unpaidBtns[0].cls) && unpaidBtns.at(-1).cls.includes('back') && unpaidBtns.at(-1).text.includes('回收租表'), JSON.stringify(unpaidBtns));
+  await nav(() => clickText('a', '回收租表'));
 
   // ---- 7. 收齊 → 問一次要不要匯出 → 分享畫面 ----
   for (const label of ['2樓之1', '2樓之2', '3樓之1', '3樓之2', '4樓之1', '4樓之2', '5樓', '6樓', '7樓', '10樓']) {
@@ -313,7 +385,13 @@ try {
   ok('設定頁：寫出「如果現在被清掉，會損失 1 筆變更」', safety.includes('會損失') && safety.includes('1 筆變更'), safety.slice(0, 160).replace(/\s+/g, ' '));
   ok('設定頁：顯示持久儲存的狀態', safety.includes('持久儲存'));
   await page.waitForFunction(() => document.querySelector('.fit') && document.querySelector('.fit').dataset.fits, { timeout: 10000 });
-  ok('設定頁：字級預覽量得出「一屏放得下」', (await page.$eval('.fit', (e) => e.dataset.fits)) === 'true');
+  // 預覽說實話：設定頁說「放得下／放不下」，要和收租表實際量到的一致（不寫死一定放得下——加了底部那一條之後，這個視窗大小就放不下）
+  const claimed = await page.$eval('.fit', (e) => e.dataset.fits);
+  await nav(() => page.click('[data-act="exit"]'));
+  await new Promise((r) => setTimeout(r, 150));
+  const actual = await page.evaluate(() => { window.scrollTo(0, 0); const ts = [...document.querySelectorAll('.tile')]; const banner = document.querySelector('.preview-banner'); const bh = banner ? banner.getBoundingClientRect().height : 0; return String(ts[ts.length - 1].getBoundingClientRect().bottom - bh <= innerHeight - document.querySelector('[data-footbar]').offsetHeight); });
+  ok('設定頁的「一屏放不放得下」和收租表實際量到的一致', claimed === actual, `設定頁說 ${claimed}／實際 ${actual}`);
+  await nav(() => hold(3300));
   await setMetaV('lastBackupAt', new Date(Date.now() - 29 * 86400000).toISOString());
 
   // ---- 9. 提醒：超過 30 天沒傳、而且有新紀錄 ----
@@ -366,7 +444,7 @@ try {
   await page.click('[data-act="restore"]');
   await page.waitForFunction(() => document.body.textContent.includes('找回完成'), { timeout: 15000 });
   ok('找回後：內容與備份完全相同', (await text('#app')).includes('完全相同'));
-  await nav(() => clickText('a', '回到收租表'));
+  await nav(() => clickText('a', '回收租表'));
   t = await tiles();
   ok('找回後：10 格全部是「已收」（和備份當時一樣）', t.length === 10 && t.every((x) => x.status === 'paid'), t.map((x) => x.status).join(','));
   ok('找回後：「上次匯出」＝備份的時間、沒有未匯出的變更', (await settingsVal('changeSeq')) === 0 && !!(await settingsVal('lastBackupAt')));
@@ -386,6 +464,8 @@ try {
   ok('已有資料：匯出一份之後才能按', true);
 
   ok('走過的每個畫面都沒有「晚輩」「家人」', seenWords.size === 0, [...seenWords].join('、'));
+  const backAsPrimary = await page.evaluate(() => window.__backPrimary || []);
+  ok('走過的每一頁：「回收租表／回上一頁／回設定」都不是主按鈕', backAsPrimary.length === 0, [...new Set(backAsPrimary)].join('；'));
   const garbage = await page.evaluate(() => window.__garbage);
   ok('走過的每個畫面都沒有出現 null／undefined／NaN（含畫完後才補上的內容）', garbage.length === 0, [...new Set(garbage)].slice(0, 5).join('；'));
   ok('全程沒有 JavaScript 錯誤', errors.length === 0, errors.join(' | '));

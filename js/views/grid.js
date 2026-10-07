@@ -75,11 +75,23 @@ export async function renderGrid(ctx) {
     buildHeader(ym, cells),
     needsReminder(s) ? buildReminder(s) : null,
     cells.length ? buildTiles(cells, ym, takeJustChanged(ctx)) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'),
-    h('footer', { class: 'grid-foot' },
-    h('p', { class: 'muted center' }, s.lastBackupAt ? `上次匯出備份：${shortDate(isoDate(new Date(s.lastBackupAt)))}` : '還沒有匯出過備份'),
-    h('a', { class: 'btn secondary small', href: '#/backup' }, '匯出備份'),
-    holdButton('設定（按住 3 秒）', 3000, () => ctx.enterEdit(), () => toast('要按住 3 秒才會打開設定'))));
-  return page;
+    h('p', { class: 'muted center last-backup' }, s.lastBackupAt ? `上次匯出備份：${shortDate(isoDate(new Date(s.lastBackupAt)))}` : '還沒有匯出過備份'));
+  const bar = buildFootbar(s, ctx);
+  // 底部那一條的高度隨字級改變：量到多高，房間格下面就留多高（捲到底時最後一列要完整看得到）
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => { if (bar.isConnected) document.documentElement.style.setProperty('--footbar-h', `${bar.offsetHeight}px`); }).observe(bar);
+  }
+  // 放在 .page 外面：.page 有進場動畫（transform），fixed 的元素放在裡面會跟著動
+  return h('div', { class: 'grid-screen' }, page, bar);
+}
+
+/** 收租表最下面固定的一條：「匯出備份」＋「設定（按住 3 秒）」（2026-10-07 Yolin）。越矮越好——它蓋在房間格上面 */
+export function buildFootbar(s, ctx) {
+  return h('footer', { class: 'footbar', 'data-footbar': '' },
+    h('div', { class: 'footbar-inner' },
+      h('div', { class: 'footbar-row' },
+        h('a', { class: 'btn secondary', href: '#/backup', 'data-act': 'foot-backup' }, '匯出備份'),
+        holdButton('設定（按住 3 秒）', 3000, () => ctx && ctx.enterEdit(), () => toast('要按住 3 秒才會打開設定')))));
 }
 
 function emptyState(ctx) {

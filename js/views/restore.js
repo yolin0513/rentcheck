@@ -2,7 +2,7 @@
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h, fill, topbar } from '../ui.js';
+import { h, fill, topbar, backButton } from '../ui.js';
 
 export async function renderRestorePage(ctx) {
   const c = await store.counts();
@@ -19,7 +19,7 @@ export async function renderRestorePage(ctx) {
       h('li', null, '按下面的「選擇檔案」，找到那個檔，選它。')),
     h('label', { class: 'btn secondary file-label' }, '選擇檔案', fileIn),
     out,
-    h('a', { class: 'btn secondary', href: back }, '回去'));
+    backButton(back, hasData ? '回設定' : '回上一頁'));
 
   fileIn.addEventListener('change', async () => {
     const f = fileIn.files[0];
@@ -58,7 +58,7 @@ export async function renderRestorePage(ctx) {
       await ctx.applyFont();
       fill(out, 
         h('p', { class: same ? 'big st-text-paid' : 'bad' }, same ? '✔ 找回完成，內容與備份完全相同。' : '✘ 找回後的內容與備份不一樣，請聯絡開發者。'),
-        h('a', { class: 'btn', href: '#/' }, '回到收租表'));
+        backButton('#/', '回收租表'));
     });
     fill(out, info,
       hasData ? h('div', { class: 'warnbox' }, h('p', null, '這支手機上已經有資料，找回會整個換掉。'), savePrev, prevStatus) : null,

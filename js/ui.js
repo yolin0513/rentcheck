@@ -53,11 +53,27 @@ export const STATUS = {
   due: { icon: '●', text: '該收了', cls: 'st-due' },
   notyet: { icon: '○', text: '還沒到', cls: 'st-notyet' },
 };
-/** 有原因時，格子上顯示原因的前三個字（格子窄，放不下全文；全文在點進去的頁面） */
+/**
+ * 格子上的狀態文字。有原因時：短的（≤ 6 個字，例如預設的「說晚點給」「聯絡不到」）整句顯示、可以換行；
+ * 長的不顯示半句（半句話比不顯示更糟，長輩看不懂），改成「看原因」，完整原因在點進去的頁面。
+ * 2026-10-07 Yolin 實機看到「！說晚點」「！聯絡不」——舊版只取前三個字。
+ */
+export const NOTE_MAX_ON_TILE = 6;
 export function statusLine(status, payment) {
   const s = STATUS[status];
-  if (status === 'note') return `${s.icon} ${Array.from(payment.note).slice(0, 3).join('')}`;
+  if (status === 'note') {
+    const note = String(payment.note).trim();
+    return Array.from(note).length <= NOTE_MAX_ON_TILE ? `${s.icon} ${note}` : `${s.icon} 看原因`;
+  }
   return `${s.icon} ${s.text}`;
+}
+
+/**
+ * 頁面最下面的返回鍵：每一頁都在同一個位置（最後一顆）、同一個樣式（.btn.back），而且不是主按鈕——
+ * 主按鈕留給那一頁真正的動作（2026-10-07 Yolin：已收的頁把「回收租表」做成最醒目的實心按鈕，層級是反的）。
+ */
+export function backButton(href, label) {
+  return h('a', { class: 'btn back', href, 'data-act': 'bottom-back' }, '‹ ', label);
 }
 
 /**

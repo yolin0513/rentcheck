@@ -12,7 +12,7 @@ import { renderBackupPage, renderDonePrompt } from './views/backupview.js';
 import { renderRestorePage } from './views/restore.js';
 import { renderSettings, renderTenantForm } from './views/settings.js';
 import { renderInstall } from './views/install.js';
-import { h, fill } from './ui.js';
+import { h, fill, backButton } from './ui.js';
 
 const EDIT_IDLE_MS = 3 * 60 * 1000;
 const PREVIEW_KEY = 'rentcheck-preview';
@@ -98,7 +98,7 @@ export async function render() {
     }
   } catch (e) {
     console.error(e);
-    view = h('div', { class: 'page' }, h('h1', null, '出了點問題'), h('p', { class: 'muted' }, String((e && e.message) || e)), h('a', { class: 'btn', href: '#/' }, '回到收租表'));
+    view = h('div', { class: 'page' }, h('h1', null, '出了點問題'), h('p', { class: 'muted' }, String((e && e.message) || e)), backButton('#/', '回收租表'));
   }
   if (seq !== renderSeq) return; // 有更新的一次 render 在跑，這一次作廢
   document.body.classList.toggle('editing', state.edit && hash.startsWith('#/settings'));

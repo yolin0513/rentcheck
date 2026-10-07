@@ -7,7 +7,7 @@
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h, fill, topbar, fmtMB } from '../ui.js';
+import { h, fill, topbar, fmtMB, backButton } from '../ui.js';
 import { monthName } from '../months.js';
 import { SNOOZE_DAYS } from './grid.js';
 
@@ -55,7 +55,7 @@ export async function renderBackupPage(ctx, { after = '#/' } = {}) {
       h('p', null, `檔名：${prepared.file.name}`),
       h('p', null, '請記得剛才把它存在哪裡。這份檔案在 App 以外的地方，就算 App 裡的資料被清掉，它也還在。'),
       h('p', { class: 'muted' }, '要找回資料時：設定 →「從備份找回」→ 選這個檔案。'),
-      h('a', { class: 'btn', href: after }, '回到收租表'));
+      backButton(after, '回收租表'));
   });
 
   return h('div', { class: 'page' },
@@ -68,7 +68,8 @@ export async function renderBackupPage(ctx, { after = '#/' } = {}) {
         await store.setMeta('backupSnoozeUntil', new Date(Date.now() + SNOOZE_DAYS * 86400000).toISOString());
         ctx.go(after);
       } }, '這週先不要')
-      : h('a', { class: 'btn secondary', href: after }, '回去'));
+      : null,
+    backButton(after, '回收租表'));
 }
 
 /** 這個月收齊時問一次 */
@@ -80,5 +81,5 @@ export async function renderDonePrompt(ctx, ym) {
     h('section', { class: 'card center' }, h('p', { class: 'big st-text-paid' }, `${monthName(ym)}收齊了！`)),
     h('p', { class: 'lead' }, '要不要匯出一份備份？'),
     h('a', { class: 'btn primary', href: '#/backup' }, '匯出備份'),
-    h('a', { class: 'btn secondary', href: `#/m/${ym}` }, '先不要'));
+    backButton(`#/m/${ym}`, '先不要，回收租表'));
 }

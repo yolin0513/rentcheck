@@ -3,9 +3,9 @@
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h, add, fill, fmtMB, daysAgo, toast } from '../ui.js';
+import { h, add, fill, fmtMB, daysAgo, toast, backButton } from '../ui.js';
 import { ymOf, addMonths, autoLabels } from '../months.js';
-import { loadMonth, buildHeader, buildTiles, buildReminder } from './grid.js';
+import { loadMonth, buildHeader, buildTiles, buildReminder, buildFootbar } from './grid.js';
 import { tryPersist } from './tenant.js';
 
 const FONT_STEPS = [['normal', '標準'], ['large', '大'], ['xlarge', '特大'], ['xxlarge', '超大']];
@@ -25,12 +25,14 @@ export async function measureFit() {
   const ym = ymOf();
   const { cells, s } = await loadMonth(ym);
   const once = (withRemind) => {
-    const host = h('div', { class: 'measure-host page grid-page', 'aria-hidden': 'true' }, buildHeader(ym, cells), withRemind ? buildReminder(s) : null, buildTiles(cells, ym));
+    const bar = buildFootbar(s, null);
+    const host = h('div', { class: 'measure-host page grid-page', 'aria-hidden': 'true' }, buildHeader(ym, cells), withRemind ? buildReminder(s) : null, buildTiles(cells, ym), bar);
     add(document.body, host);
     const tiles = [...host.querySelectorAll('.tile')];
     const top = host.getBoundingClientRect().top;
     const bottom = tiles.length ? tiles[tiles.length - 1].getBoundingClientRect().bottom - top : 0;
-    const avail = innerHeight - (parseFloat(getComputedStyle(host).paddingBottom) || 0);
+    // 可用高度＝整個畫面減掉最下面固定的那一條（它會蓋在房間格上面）
+    const avail = innerHeight - bar.offsetHeight;
     const tooLong = [...host.querySelectorAll('.tile-label')].filter((el) => {
       const lh = parseFloat(getComputedStyle(el).lineHeight) || 1;
       return el.getBoundingClientRect().height > lh * 2.2; // 超過兩行
@@ -193,7 +195,7 @@ export async function renderTenantForm(ctx, id) {
       f('從哪個月開始租', start),
       f('電話（可不填）', phone),
       err, save,
-      h('a', { class: 'btn secondary', href: '#/settings' }, '不存，回去')));
+      backButton('#/settings', '不存，回設定')));
 
   if (!isNew) {
     const cur = ymOf();

@@ -2,6 +2,7 @@
 
 import { naturalCompare, autoLabels, cellStatus, addMonths, daysInMonth, dueDayIn, isActive, monthName } from '../js/months.js';
 import { buildPayload, renderBackupHtml, extractPayload, verifyPayload, contentHash } from '../js/backupcore.js';
+import { statusLine, NOTE_MAX_ON_TILE } from '../js/ui.js';
 
 let fail = 0;
 const ok = (name, cond, extra = '') => { console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!cond) fail++; };
@@ -41,6 +42,20 @@ ok('未來的月份＝還沒到', st(null, '2026-11', 1, '2026-10-30') === 'noty
 ok('改回沒收到、沒有原因＝依日期判斷', st({ status: 'unpaid', note: '' }, '2026-10', 5, '2026-10-20') === 'due');
 ok('在租期間：開始月份當月算', isActive({ startMonth: '2026-10', endMonth: null }, '2026-10'));
 ok('搬走：搬走那個月之後不算', !isActive({ startMonth: '2026-01', endMonth: '2026-10' }, '2026-11') && isActive({ startMonth: '2026-01', endMonth: '2026-10' }, '2026-10'));
+
+// ---- 格子上的原因：不能顯示半句 ----
+for (const note of ['說晚點給', '聯絡不到', '分次給', '其他', '月底給', '下週三匯款']) {
+  ok(`短的原因整句顯示：「${note}」`, statusLine('note', { note }) === `！ ${note}`, statusLine('note', { note }));
+}
+const longNote = '下個月十號跟下下個月一起給';
+ok('長的原因不顯示半句，改成「看原因」', statusLine('note', { note: longNote }) === '！ 看原因');
+// 不變式：格子上出現的原因文字，要嘛是完整的原因，要嘛完全不含原因的任何前段（不能是被切掉的半句）
+const isHalf = (shown, note) => shown !== note && Array.from(note).some((_, i) => i > 0 && shown === Array.from(note).slice(0, i).join(''));
+const halfSentence = (note) => isHalf(statusLine('note', { note }).slice(2), note);
+ok('任何長度的原因都不會變成半句', ['說晚點給', '聯絡不到', longNote, '一二三四五六七', '一二三四五六'].every((n) => !halfSentence(n)));
+const oldTile = (n) => Array.from(n).slice(0, 3).join('');   // 舊版的寫法
+ok('對照組：同一個判斷，套在舊版「前三個字」上會判成半句（說晚點給、聯絡不到）', isHalf(oldTile('說晚點給'), '說晚點給') && isHalf(oldTile('聯絡不到'), '聯絡不到'));
+ok(`門檻是 ${NOTE_MAX_ON_TILE} 個字：剛好 ${NOTE_MAX_ON_TILE} 個字整句顯示、多一個字就改標記`, statusLine('note', { note: '一二三四五六' }) === '！ 一二三四五六' && statusLine('note', { note: '一二三四五六七' }) === '！ 看原因');
 
 // ---- 備份 ----
 const tenants = [
