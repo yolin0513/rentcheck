@@ -9,6 +9,7 @@
 1. **產出一律繁體中文**（回覆、文件、commit 訊息）；思考過程不限語言。程式碼、檔名、專有名詞維持原樣。
 2. **嚴禁互動式提示框**（AskUserQuestion 之類）：Yolin 常從遠端操作，點不到。要他決定的事，用純文字列選項與代價。
 3. **對外發布一律先問**：建 GitHub repo、push、部署到任何網址，都要 Yolin（或 Dispatch 轉達）明確說好。
+   - 線上網址：https://yolin0513.github.io/rentcheck/（repo `yolin0513/rentcheck`，public）。
    - 推送一律用 `bash scripts/pushgate.sh`（共用慣例 §2.5），不要直接 `git push`。改過閘門、`selfcheck.mjs` 或驗法，要先 commit 再跑 `bash scripts/pushgate-verify.sh` 重新登記，否則閘門回 4、不推。
 4. **跨專案唯讀**：`../JLPT_App`、`../StockDiary`、`../MealMate`、`../TripQuest` 只能讀。
 5. **個資不進 repo**：租客姓名、門牌、金額都是個資。測試一律用合成資料（「測試戶01」「中山路12號」這類）；Yolin 家裡的真實資料只存在長輩的手機裡。
@@ -26,6 +27,7 @@ npm run mutate       # 突變驗證（約 3 分鐘）
 npm run pack         # 產生 dist/（只含 App 檔案，給直接上傳型的託管）
 npm run icons -- A   # 產生主畫面圖示（A／B／C，見 scripts/icon-designs.mjs）
 bash scripts/pushgate.sh          # 推送一律用這支（自查 → 推送 → 核對遠端）
+node scripts/pages-verify.mjs     # 推送後一定要跑：等 GitHub Pages 建好，線上檔案要和本機逐字相同
 bash scripts/pushgate-verify.sh   # 改過閘門、自查或驗法之後要重跑（本機假遠端 14 種情境），全部符合才登記
 bash scripts/pushgate-mutants.sh  # 閘門的突變驗證（3 條）
 ```

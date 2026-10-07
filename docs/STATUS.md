@@ -1,8 +1,20 @@
 # 收租紀錄（RentCheck）— 現況與交接
 
-> 最後更新：2026-10-07（v0.3.0：圖示定案 C；等 Q5 核准就部署到 GitHub Pages）
+> 最後更新：2026-10-07（v0.3.0 已上線：https://yolin0513.github.io/rentcheck/）
 
 ## 目前進行中／交接
+
+- **【最新】v0.3.0 已上線：https://yolin0513.github.io/rentcheck/**（repo `yolin0513/rentcheck`，PUBLIC，GitHub Pages legacy、`main` 根目錄——和四個 App 相同）。
+  - 部署經過（2026-10-07，Dispatch 核准 Q5-a）：
+    1. 改寫本機一個從沒推過的 commit（`1425842` → `1437934`），只換掉 `scripts/predeploy-scan.mjs` 的 3 行範例字串；後面 4 個 commit 用原本的內容樹、訊息、作者、時間接回去，**逐一核對內容樹與改寫前相同**，commit 數不變（7 個）。改寫前的指標留在本機 `refs/backup/pre-rewrite`（不推）。
+    2. 閘門驗法重跑：14 種全部符合、重新登記。
+    3. `gh repo create yolin0513/rentcheck --public`。
+    4. `bash scripts/pushgate.sh`：遠端是空的 → 自查全部 7 個 commit（新增行 6531 行＝numstat 6531 行）通過 → 推送 → 遠端 main＝本機 main（`34b2710`）。
+    5. 開 Pages（legacy、`main`、`/`）。
+    6. `node scripts/pages-verify.mjs`：等 Pages 建好（建的是 `34b2710`），線上的 `js/version.js`、`sw.js`、`index.html`、`manifest.webmanifest` 和本機逐字相同，線上版本 0.3.0。
+    7. 線上冒煙測試：4 個圖示 PNG 和本機逐位元組相同；瀏覽器分頁只顯示安裝說明；預覽模式正常；Service Worker 註冊在 `/rentcheck/`；載入的版本 0.3.0；沒有 JavaScript 錯誤。
+  - **之後每次發版**：改 App 檔案 → 升版號（`sw.js`、`js/version.js`、`package.json`）→ `npm test` → commit → `bash scripts/pushgate.sh` → `node scripts/pages-verify.mjs`（推送成功 ≠ 實際生效，一定要跑）。
+  - **下一步**：Yolin 在 iPhone 上試，先試三件事（匯出到「檔案」、從「檔案」還原、在選資料夾那一步按取消看結果），以及 B1（刪掉主畫面圖示再加回來，資料還在不在）。
 
 - **【最新】v0.3.0：Yolin 選圖示 C（房間格），已加強並定案。** 只差 Q5（改寫本機一個 commit）核准，就能照順序部署。
   - Dispatch 要求：C 的已知缺點（29 點時勾太小）要改好再上線，並用原本那套驗證重跑。
@@ -50,7 +62,7 @@
 |---|---|---|---|
 | Q1 | ~~怎麼讓 Yolin 在 iPhone 上看到~~ **已定（Dispatch 核准 Cloudflare，非 yolin0513.github.io）**；等 Q4 挑完圖示就部署 | **a** Cloudflare Pages 直接上傳 `dist/`（`npm run pack` 產生，23 個檔、約 110 KB；Yolin 在後台拖一個資料夾，約 5 分鐘；網址和其他四個 App 不同來源；不經過 git，不需要閘門）。**b** 照四個 App 的慣例：新的 public repo＋GitHub Pages（`yolin0513.github.io/rentcheck/`）——要先移植推送閘門（一輪的工作量），而且和四個 App **同一個來源**。**c** 這台電腦開本機伺服器、iPhone 連同一個 Wi-Fi：不對外，但不是 HTTPS，**匯出備份、照片、持久儲存都不能用**，只能看版面 | **a** 先看；確定要長期用時再決定正式放哪 |
 | Q4 | ~~**圖示三選一**~~ **已定：C（Yolin 2026-10-07）** |：A 房子打勾（深綠）／B 硬幣打勾（黃黑）／C 房間格（深藍） | 見 `.logs/icons/圖示候選.png`。三個在 60 點、29 點、黑白、模糊下都看得出形狀；B 對比最強但和黃色 App 撞色、意思較泛（像待辦清單）；C 和 App 畫面一致，但 29 點時勾很小 | 開發者傾向 A（意思最直接：房子＝收租、勾＝收到了；重度模糊後房子的外形還在），但審美由 Yolin 決定 |
-| Q5 | **改寫本機歷史（從沒推過）** | **a（建議）** 把那一個 commit 裡的 3 行範例改成現在的寫法（其餘內容不變），後面的 commit 接回去；舊 commit 留在 reflog 可找回。**b** 把 5 個本機 commit 壓成 1 個（簡單，但失去本機的分段紀錄）。**c** 在閘門加白名單放這 3 行過——**不建議**（閘門開洞，以後別的東西也可能從洞裡過去） | a |
+| Q5 | ~~**改寫本機歷史（從沒推過）**~~ **已核准 a、已完成（Dispatch 2026-10-07）** | **a（建議）** 把那一個 commit 裡的 3 行範例改成現在的寫法（其餘內容不變），後面的 commit 接回去；舊 commit 留在 reflog 可找回。**b** 把 5 個本機 commit 壓成 1 個（簡單，但失去本機的分段紀錄）。**c** 在閘門加白名單放這 3 行過——**不建議**（閘門開洞，以後別的東西也可能從洞裡過去） | a |
 | Q2 | 拍收據：直接開相機，還是讓使用者選「拍照／從相簿」 | 直接開相機：少一步，但轉帳截圖放不進來。選單：多一步 | 先直接開相機，看實際拍的是什麼 |
 | Q3 | 設計草案 D3、D4、D5 | 見設計草案第 10 節 | 這一版照建議做了：D3 要照片、D4 不縮字、D5 砍掉的都沒做 |
 
