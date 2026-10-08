@@ -5,7 +5,7 @@
 // 查什麼（範圍內的每一個 commit，不是只比兩端）：
 //   · 新增行：照 diff 的結構抽——`diff --git` 到第一個 `@@` 之間是檔頭，跳過；`@@` 之後以 `+` 開頭的才是內容。
 //   · commit 訊息、作者與提交者的名字與信箱。
-//   · 抽出的新增行數用 `git log --numstat` 第一欄的加總核對，必須相等（抽多、抽少都停）。
+//   · 抽出的新增行數用 `git log --numstat -U0`（和抽取同一種 diff）第一欄的加總核對，必須相等（抽多、抽少都停）。
 // 回傳值：通過 0；有命中、任何一類的對照組沒命中（檢查器壞了）、範圍裡沒有 commit、抽取與 numstat 對不上、取不到訊息與作者欄 → 非 0。
 // 命中時只印類別與來源，不印命中的原文。
 // 真實資料黑名單：.logs/private-words.txt（不進版控，一行一個；例如長輩與租客的真實姓名、真實門牌）。沒有這個檔就跳過這一類，並印出來。
@@ -39,7 +39,9 @@ export function selfcheck(range, git = realGit, log = console.log, privateWords 
   const commits = git(['rev-list', range]).split('\n').filter(Boolean);
   // --root：範圍從第一個 commit 開始時，第一個 commit 也要有 diff
   const added = addedLinesOf(git(['log', '-p', '--root', '--no-color', '--format=', '-U0', range]));
-  const numstat = numstatAdded(git(['log', '--root', '--numstat', '--format=', range]));
+  // numstat 要和上面抽取用同一種 diff（-U0）：前後文行數不同時，git 對「搬移一整段」的對齊方式會不同，
+  // 兩邊各算各的就會差一兩行（2026-10-08 v0.7.0 的 settings.js：43 對 44），把乾淨的 commit 當成「抽取壞了」擋下
+  const numstat = numstatAdded(git(['log', '--root', '--numstat', '-U0', '--format=', range]));
   const meta = git(['log', '--format=%B%n%an <%ae>%n%cn <%ce>', range]).split('\n').filter((l) => l.trim());
   log(`查了：commit ${commits.length} 個；新增行 ${added.length} 行（numstat ${numstat} 行）；commit 訊息與作者欄 ${meta.length} 行`);
 
