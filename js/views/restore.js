@@ -47,7 +47,7 @@ export async function renderRestorePage(ctx) {
           const res = await backup.share(prepared);
           if (res === 'cancelled') { prevStatus.textContent = '✘ 沒有匯出（剛才取消了）。要找回之前，一定要先匯出一份目前的資料。'; return; }
           savedCurrent = true; savePrev.disabled = true;
-          prevStatus.textContent = '✔ 目前的資料已經匯出一份了。';
+          fill(prevStatus, '✔ 目前的資料已經匯出一份了。');
           refresh();
         } catch (e) { prevStatus.textContent = '✘ 沒有匯出成功：' + (e.message || e); }
       });

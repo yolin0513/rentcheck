@@ -53,6 +53,16 @@ await page.evaluateOnNewDocument(() => {
   };
   new MutationObserver((ms) => { for (const m of ms) { m.addedNodes.forEach(scan); if (m.type === 'characterData') scan(m.target); } })
     .observe(document, { subtree: true, childList: true, characterData: true });
+  // 畫面上出現任何「可以當 emoji 的字元」（✔ ◀ ▶ 📞 📷…）就記下來：iPhone 用 emoji 字型畫它們，顏色固定、不跟著主題
+  // （2026-10-08 實機：森林主題深綠按鈕上的 ✔ 是深灰黑色）。應該全部換成 ui.js 的 SVG 圖示
+  window.__emoji = [];
+  const EMOJI = /\p{Extended_Pictographic}/u;
+  const scanEmoji = (n) => {
+    const t = n.nodeType === 3 || n.nodeType === 1 ? n.textContent : '';
+    if (t && EMOJI.test(t)) window.__emoji.push(`${t.match(EMOJI)[0]}｜${location.hash || '#/'}｜${t.trim().slice(0, 30)}`);
+  };
+  new MutationObserver((ms) => { for (const m of ms) { m.addedNodes.forEach(scanEmoji); if (m.type === 'characterData') scanEmoji(m.target); } })
+    .observe(document, { subtree: true, childList: true, characterData: true });
   try { window.__shareMode = sessionStorage.getItem('__shareMode') || 'ok'; } catch { window.__shareMode = 'ok'; } // about:blank 讀不到 sessionStorage
   navigator.canShare = () => true;
   navigator.share = async ({ files }) => {
@@ -95,6 +105,9 @@ const settingsVal = (k) => page.evaluate((k) => new Promise((res) => {
   const r = indexedDB.open('rentcheck');
   r.onsuccess = () => { const q = r.result.transaction('meta').objectStore('meta').get(k); q.onsuccess = () => { res(q.result ? q.result.v : undefined); r.result.close(); }; };
 }), k);
+// 「幾天前」一律用頁面裡的時鐘（固定在 2026-10-07）：用 Node 的真實時鐘，真實日期過了一天，「31 天前」就只剩 30 天（2026-10-08 踩到）
+const pageNow = () => page.evaluate(() => Date.now());
+const HOLD = 1200;   // 設定要按住 1 秒：測試按 1.2 秒
 async function hold(ms) {
   const sc = await page.evaluate(() => visualViewport.scale);
   if (Math.abs(sc - 1) > 0.001) throw new Error(`畫面被縮放了（${sc}），滑鼠座標會偏——測試環境問題，先 reload()`);
@@ -145,6 +158,7 @@ try {
   ok('收租表：10 格', t.length === 10, String(t.length));
   ok('收租表：位置照門牌排', t.map((x) => x.label).join(',') === '2樓之1,2樓之2,3樓之1,3樓之2,4樓之1,4樓之2,5樓,6樓,7樓,10樓', t.map((x) => x.label).join(','));
   ok('剛設定完：還不會出現「匯出備份」提醒', (await page.$('.remind')) === null);
+  ok('還沒匯出過：「匯出備份」按鈕的第二行寫「還沒匯出過」', (await page.evaluate(() => { const e = document.querySelector('[data-act="foot-backup"] [data-last-backup]'); return e ? e.textContent : null; })) === '還沒匯出過');
   const setMetaV = (k, v) => page.evaluate((k, v) => new Promise((res) => {
     const r = indexedDB.open('rentcheck');
     r.onsuccess = () => { const t = r.result.transaction('meta', 'readwrite'); t.objectStore('meta').put({ k, v }); t.oncomplete = () => { r.result.close(); res(); }; };
@@ -157,13 +171,22 @@ try {
   await reload();
   ok('10/7：5 號繳的「該收了」、20 號繳的「還沒到」', t.filter((x) => x.status === 'due').length === 5 && t.filter((x) => x.status === 'notyet').length === 5);
 
-  // ---- 4. 按住 3 秒才進得去設定 ----
+  // ---- 4. 按住 1 秒才進得去設定（2026-10-08 Yolin：從 3 秒縮短，按鈕上只寫「設定」） ----
+  ok('設定按鈕只寫「設定」（不寫「按住幾秒」）', (await text('.footbar .hold')).trim() === '設定', await text('.footbar .hold'));
   await hold(400);
   await new Promise((r) => setTimeout(r, 300));
   ok('只按一下：不會進設定', (await page.evaluate(() => location.hash)) !== '#/settings');
-  ok('只按一下：提示「要按住 3 秒」', (await page.$eval('body', (b) => b.textContent)).includes('要按住 3 秒'));
-  await nav(() => hold(3300));
-  ok('按住 3 秒：進入設定', (await page.evaluate(() => location.hash)) === '#/settings');
+  ok('只按一下：提示「按住不放」', (await page.$eval('body', (b) => b.textContent)).includes('按住不放'));
+  await hold(700);
+  await new Promise((r) => setTimeout(r, 300));
+  ok('按住 0.7 秒：還不會進設定（比單擊長很多才算）', (await page.evaluate(() => location.hash)) !== '#/settings');
+  // 不用 nav()：進不去的話不會有新畫面，nav() 只會逾時、整個流程中斷（看不出是哪一條紅）
+  await hold(HOLD);
+  const entered = await page.waitForFunction(() => location.hash === '#/settings' && document.querySelector('.settings'), { timeout: 3000 }).then(() => true, () => false);
+  ok('按住 1 秒：進入設定', entered);
+  if (!entered) throw new Error('按住 1 秒進不了設定，後面的步驟都走不下去');
+  const secs = await page.$$eval('.settings .card h2', (hs) => hs.map((x) => x.textContent));
+  ok('設定頁：「租客」在最上面', secs[0] === '租客', secs.join('、'));
   // 切到背景 → 自動離開
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
@@ -176,15 +199,43 @@ try {
   if (!left) await nav(() => page.evaluate(() => { location.hash = '#/'; }));
   ok('離開設定後直接打 #/settings 也進不去', await (async () => { await nav(() => page.evaluate(() => { location.hash = '#/settings'; })); return (await page.evaluate(() => location.hash)) === '#/'; })());
 
-  // ---- 5. 確認收款、改回、記原因 ----
   const tileOf = (label) => page.$$eval('.tile', (els, l) => els.findIndex((e) => e.querySelector('.tile-label').textContent === l), label);
   const openTile = async (label) => { const i = await tileOf(label); await page.evaluate((i) => document.querySelectorAll('.tile')[i].scrollIntoView({ block: 'center' }), i); await nav(async () => (await page.$$('.tile'))[i].click()); };   // 先捲到中間：最下面那一條會蓋住底部的格子
+
+  // ---- 4b. 上月／下月／回到本月（2026-10-08 Yolin 實機：「回到本月」按了沒反應；之前沒有任何測試走過這條路） ----
+  const thisMonth = await text('.mname');
+  await nav(() => clickText('.navbtn', '上月'));
+  const prevMonth = await text('.mname');
+  ok('按「上月」：換到上一個月，出現「回到本月」', prevMonth !== thisMonth && (await page.$('[data-act="this-month"]')) !== null, `${thisMonth}→${prevMonth}`);
+  await nav(() => page.click('[data-act="this-month"]'));
+  ok('按「回到本月」：真的回到這個月（月份、已收幾戶都是本月的）', (await text('.mname')) === thisMonth && (await page.$('.summary.other')) === null && (await page.$$('.tile')).length === 10, await text('.mname'));
+  await nav(() => clickText('.navbtn', '下月'));
+  await nav(() => clickText('.navbtn', '下月'));
+  await nav(() => page.click('[data-act="this-month"]'));
+  ok('往後翻兩個月再按「回到本月」：也回到這個月', (await text('.mname')) === thisMonth, await text('.mname'));
+  await nav(() => clickText('.navbtn', '下月'));
+  const nextMonth = await text('.mname');
+  await openTile('2樓之1');
+  await nav(() => clickText('a', '回收租表'));
+  ok('在別的月份點進一戶再回來：停在那個月（不是跳回本月）', (await text('.mname')) === nextMonth && nextMonth !== thisMonth, await text('.mname'));
+  await nav(() => page.click('[data-act="this-month"]'));
+
+  // ---- 5. 確認收款、改回、記原因 ----
   await openTile('2樓之2');
   // 2樓之2 是第 6 戶（index 5）：月租 6000+5×500＝8,500、5 號繳
   const tb = await page.evaluate(() => { const b = document.querySelector('.topbar'); const k = b && b.querySelector('.backbtn'); const r = b && b.getBoundingClientRect(); return b ? { back: k ? k.textContent : '', title: b.querySelector('.topbar-title').textContent, top: r.top, h: r.height, backH: k ? k.getBoundingClientRect().height : 0 } : null; });
   ok('詳情頁：最上面有標題列，返回鍵寫著「回收租表」（不只是箭頭）', !!tb && tb.back.includes('回收租表') && tb.title.length > 0, JSON.stringify(tb));
   ok('詳情頁：標題列夠高、返回鍵至少 48 點高', !!tb && tb.h >= 56 && tb.backH >= 48);
-  ok('點格子：顯示金額與繳款日', (await text('.amount')).replace(/\s/g, '') === '8,500元' && (await text('#app')).includes('每月 5 號繳'));
+  ok('點格子：顯示金額與繳款日', (await text('.amount')).replace(/\s/g, '') === '8,500元' && (await text('#app')).includes('每月 5 號'));
+  const tick = await page.evaluate(() => {
+    const b = document.querySelector('.tenant-page .btn.primary'); const ic = b && b.querySelector('svg.ic');
+    if (!ic) return null;
+    const tn = [...b.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim()); const r = document.createRange(); r.selectNodeContents(tn);
+    const tr = r.getBoundingClientRect(), ir = ic.getBoundingClientRect();
+    return { btn: getComputedStyle(b).color, icon: getComputedStyle(ic).color, stroke: getComputedStyle(ic.querySelector('path')).stroke, dy: Math.round(((ir.top + ir.bottom) / 2 - (tr.top + tr.bottom) / 2) * 10) / 10, fs: parseFloat(getComputedStyle(b).fontSize) };
+  });
+  ok('「收到了」前面的勾：是圖示（不是 emoji 字元），顏色和字一樣', !!tick && tick.icon === tick.btn && tick.stroke === tick.btn, JSON.stringify(tick));
+  ok('「收到了」前面的勾：和字對齊（中心高低差 ≤ 字高的 15%）', !!tick && Math.abs(tick.dy) <= tick.fs * 0.15, JSON.stringify(tick));
   await nav(() => clickText('a', '收到了'));
   ok('確認頁：標題列「確定收到」＋「回上一頁」', (await page.$eval('.topbar', (b) => b.textContent)).includes('回上一頁') && (await page.$eval('.topbar-title', (b) => b.textContent)) === '確定收到');
   ok('確認頁：大字寫出名字與金額', (await text('#app')).includes('確定收到') && (await text('#app')).includes('8,500 元？'));
@@ -310,10 +361,50 @@ try {
   // Chromium 的行動模擬在切換視窗大小後會留下頁面縮放（重新載入也清不掉）；直接把縮放設回 1
   { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }
 
+  // ---- 6a. 詳情頁排版（2026-10-08 Yolin：地址被斷成「…永和路60／號1樓」、間距不一致）。最窄＋每一種字級 ----
+  await page.setViewport({ width: 320, height: 626, deviceScaleFactor: 2, isMobile: true });
+  for (const font of ['normal', 'large', 'xlarge', 'xxlarge']) {
+    await page.evaluate((f) => { document.documentElement.dataset.font = f; }, font);
+    await openTile('3樓之2');
+    const L = await page.evaluate(() => {
+      const lines = (el) => { const r = document.createRange(); r.selectNodeContents(el); return new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size; };
+      // 地址的每一段（「中山路」「12號」「3樓之2」）都在同一行：數字和單位沒被拆開（一段本身比整行還寬時例外）
+      const parts = [...document.querySelectorAll('.detail .addr-part')];
+      const split = parts.filter((p) => lines(p) > 1 && p.getBoundingClientRect().width < p.parentElement.getBoundingClientRect().width - 1).map((p) => p.textContent);
+      // 三層之間的間距一樣
+      const kids = [...document.querySelector('.detail').children].filter((k) => k.getBoundingClientRect().height > 0);
+      const gaps = kids.slice(1).map((k, i) => Math.round(k.getBoundingClientRect().top - kids[i].getBoundingClientRect().bottom));
+      // 資料欄的內容都對齊同一條線
+      const lefts = new Set([...document.querySelectorAll('.info dd')].map((d) => Math.round(d.getBoundingClientRect().left)));
+      return { parts: parts.length, split, gaps, lefts: lefts.size, hs: document.documentElement.scrollWidth <= innerWidth + 1 };
+    });
+    ok(`320 寬・${font}：詳情頁的地址沒有把數字和單位拆開、資料對齊同一條線、三層間距一樣、沒有橫向捲動`,
+      L.parts >= 3 && L.split.length === 0 && L.lefts === 1 && L.gaps.length >= 2 && Math.max(...L.gaps) - Math.min(...L.gaps) <= 1 && L.hs, JSON.stringify(L));
+    await nav(() => clickText('a', '回收租表'));
+  }
+  // 上面四種字級剛好不一定會斷在「12號」中間：把地址欄從很窄掃到很寬（每 2 點一次），任何寬度都不能把一段拆開
+  await page.evaluate(() => { document.documentElement.dataset.font = 'large'; });
+  await openTile('3樓之2');
+  const sweep = await page.evaluate(() => {
+    const lines = (el) => { const r = document.createRange(); r.selectNodeContents(el); return new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size; };
+    const info = document.querySelector('.info'); const bad = [];
+    for (let w = 30; w <= 260; w += 2) {
+      info.style.gridTemplateColumns = `max-content ${w}px`;
+      for (const p of document.querySelectorAll('.info .addr-part')) if (lines(p) > 1 && p.getBoundingClientRect().width < w - 1) bad.push(`${w}px:${p.textContent}`);
+    }
+    info.style.gridTemplateColumns = '';
+    return bad;
+  });
+  ok('任何寬度：詳情頁的地址沒有把數字和單位拆開（地址欄 30～260 點，每 2 點量一次）', sweep.length === 0, sweep.slice(0, 5).join('、'));
+  await nav(() => clickText('a', '回收租表'));
+  await page.setViewport({ width: 390, height: 763, deviceScaleFactor: 2, isMobile: true });
+  { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }
+
   // ---- 6b. 電話（第一個新增的租客「3樓之2」有填電話） ----
   await openTile('3樓之2');
   const tel = await page.evaluate(() => { const a = document.querySelector('a.phone'); return a ? { href: a.getAttribute('href'), text: a.textContent } : null; });
-  ok('有填電話的租客：詳情頁有「打電話」，按了直接撥（tel:）', !!tel && tel.href === 'tel:0900000111' && tel.text.includes('0900-000-111'), JSON.stringify(tel));
+  ok('有填電話的租客：詳情頁有電話，按了直接撥（tel:）', !!tel && tel.href === 'tel:0900000111' && tel.text.includes('0900-000-111'), JSON.stringify(tel));
+  ok('詳情頁：顯示完整地址', (await page.$$eval('.info dd', (d) => d.map((x) => x.textContent))).includes('中山路12號3樓之2'));
   // 最容易斷開的情況：最窄（320）＋最大字（超大）。號碼要在同一行，整顆電話鍵要在卡片裡面
   await page.setViewport({ width: 320, height: 626, deviceScaleFactor: 2, isMobile: true });
   await page.evaluate(() => { document.documentElement.dataset.font = 'xxlarge'; });
@@ -327,7 +418,7 @@ try {
   ok('電話號碼不從中間斷開（整個號碼在同一行）', telLines === 1, String(telLines));
   await nav(() => clickText('a', '回收租表'));
   await openTile('2樓之2');
-  ok('沒填電話的租客：不顯示電話那一塊', (await page.$('a.phone')) === null && !(await text('#app')).includes('打電話'));
+  ok('沒填電話的租客：不顯示電話那一列', (await page.$('a.phone')) === null && !(await page.$$eval('.info dt', (d) => d.map((x) => x.textContent))).includes('電話'));
   const unpaidBtns = await page.$$eval('.tenant-page .btn', (b) => b.map((x) => ({ text: x.textContent, cls: x.className })));
   ok('該收的頁面：主按鈕是「收到了」、返回在最下面而且是返回樣式', unpaidBtns[0].text.includes('收到了') && !/secondary|back/.test(unpaidBtns[0].cls) && unpaidBtns.at(-1).cls.includes('back') && unpaidBtns.at(-1).text.includes('回收租表'), JSON.stringify(unpaidBtns));
   await nav(() => clickText('a', '回收租表'));
@@ -354,16 +445,18 @@ try {
   await page.waitForFunction(() => window.__shared.length === 1, { timeout: 15000 });
   await page.waitForFunction(() => document.querySelector('.result') && document.querySelector('.result').dataset.result, { timeout: 5000 });
   const okMsg = await page.$eval('.result', (e) => ({ kind: e.dataset.result, text: e.textContent }));
-  ok('匯出成功：明確寫「備份已匯出」、檔名、存在 App 以外', okMsg.kind === 'shared' && okMsg.text.includes('✔ 備份已匯出') && okMsg.text.includes('收租紀錄_') && okMsg.text.includes('App 以外'), okMsg.text.slice(0, 60));
+  ok('匯出成功：明確寫「備份已匯出」、檔名、存在 App 以外', okMsg.kind === 'shared' && okMsg.text.includes('備份已匯出') && okMsg.text.includes('收租紀錄_') && okMsg.text.includes('App 以外'), okMsg.text.slice(0, 60));
   const shared = await page.evaluate(() => window.__shared[0]);
   ok('分享出去的是 .html 備份檔', shared.name.endsWith('.html') && shared.text.includes('rentcheck-backup'), shared.name);
   ok('備份檔帶著收據照片', /"photos":\[\{"id":"ph-/.test(shared.text));
   ok('分享成功：已匯出的位置＝當時的變更序號', (await settingsVal('backedUpSeq')) === seqBefore);
   ok('分享成功：記下上次匯出時間', !!(await settingsVal('lastBackupAt')));
+  await nav(() => page.evaluate(() => { location.hash = '#/'; }));
+  const fb = await page.evaluate(() => { const b = document.querySelector('[data-act="foot-backup"]'); const sub = b && b.querySelector('[data-last-backup]'); return { sub: sub ? sub.textContent : null, inBtn: !!sub, para: !!document.querySelector('.last-backup') }; });
+  ok('匯出之後：「匯出備份」按鈕的第二行寫「上次 10/7」（不再另外占一行）', fb.inBtn && fb.sub === '上次 10/7' && !fb.para, JSON.stringify(fb));
 
   // 取消分享 → 不算傳出
   await page.evaluate(() => sessionStorage.setItem('__shareMode', 'cancel'));
-  await nav(() => page.evaluate(() => { location.hash = '#/'; }));
   await openTile('10樓');
   await nav(() => clickText('button', '改回'));
   await nav(() => page.evaluate(() => { location.hash = '#/backup'; }));
@@ -380,10 +473,14 @@ try {
 
   // ---- 8. 設定頁：「如果現在被清掉，會損失多少」 ----
   await nav(() => page.evaluate(() => { location.hash = '#/'; }));
-  await nav(() => hold(3300));
-  const safety = await text('.settings .card');
+  await nav(() => hold(HOLD));
+  const safety = await text('[data-section="safety"]');
   ok('設定頁：寫出「如果現在被清掉，會損失 1 筆變更」', safety.includes('會損失') && safety.includes('1 筆變更'), safety.slice(0, 160).replace(/\s+/g, ' '));
-  ok('設定頁：顯示持久儲存的狀態', safety.includes('持久儲存'));
+  const persistedNow = await page.evaluate(() => navigator.storage.persisted());
+  ok('設定頁：iPhone 沒答應保留資料時才顯示（沒問題就不顯示）', persistedNow ? !safety.includes('保留資料') : safety.includes('還沒答應保留'), String(persistedNow));
+  ok('設定頁：資料安全不顯示技術細節（已用空間、請求時間）', !/已用空間|上次請求|MB/.test(safety), safety.replace(/\s+/g, ' ').slice(0, 120));
+  const logInfo = await page.evaluate(() => { const sec = document.querySelector('[data-section="log"]'); const d = sec.querySelector('details'); return { shown: [...sec.querySelectorAll(':scope > ul > li')].length, more: d ? d.querySelectorAll('li').length : 0, open: d ? d.open : false }; });
+  ok('異動紀錄：只列最近 3 筆，更早的收起來（預設不展開）', logInfo.shown === 3 && logInfo.more > 0 && !logInfo.open, JSON.stringify(logInfo));
   await page.waitForFunction(() => document.querySelector('.fit') && document.querySelector('.fit').dataset.fits, { timeout: 10000 });
   // 預覽說實話：設定頁說「放得下／放不下」，要和收租表實際量到的一致（不寫死一定放得下——加了底部那一條之後，這個視窗大小就放不下）
   const claimed = await page.$eval('.fit', (e) => e.dataset.fits);
@@ -391,13 +488,13 @@ try {
   await new Promise((r) => setTimeout(r, 150));
   const actual = await page.evaluate(() => { window.scrollTo(0, 0); const ts = [...document.querySelectorAll('.tile')]; const banner = document.querySelector('.preview-banner'); const bh = banner ? banner.getBoundingClientRect().height : 0; return String(ts[ts.length - 1].getBoundingClientRect().bottom - bh <= innerHeight - document.querySelector('[data-footbar]').offsetHeight); });
   ok('設定頁的「一屏放不放得下」和收租表實際量到的一致', claimed === actual, `設定頁說 ${claimed}／實際 ${actual}`);
-  await nav(() => hold(3300));
-  await setMetaV('lastBackupAt', new Date(Date.now() - 29 * 86400000).toISOString());
+  await nav(() => hold(HOLD));
+  await setMetaV('lastBackupAt', new Date((await pageNow()) - 29 * 86400000).toISOString());
 
   // ---- 9. 提醒：超過 30 天沒傳、而且有新紀錄 ----
   await nav(() => page.click('[data-act="exit"]'));
   ok('29 天前才匯出過：沒有提醒', (await page.$('.remind')) === null);
-  await setMetaV('lastBackupAt', new Date(Date.now() - 31 * 86400000).toISOString());
+  await setMetaV('lastBackupAt', new Date((await pageNow()) - 31 * 86400000).toISOString());
   await reload();
   ok('超過 30 天沒匯出、之後有新紀錄：格子上方出現溫和的提醒', (await page.$('.remind')) !== null && !/遺失|危險|刪除/.test(await text('.remind')));
   const remindH = await page.$eval('.remind', (e) => e.getBoundingClientRect().height);
@@ -407,7 +504,7 @@ try {
   ok('「這週先不要」：回到收租表、提醒消失', (await page.$('.remind')) === null && (await page.$$('.tile')).length === 10);
 
   // ---- 9b. 外觀與動畫 ----
-  await nav(() => hold(3300));
+  await nav(() => hold(HOLD));
   for (const th of ['sky', 'forest', 'warm']) {
     await nav(() => page.click(`[data-theme="${th}"]`));
     ok(`切換外觀「${th}」：套用到整個 App，而且記住`, (await page.evaluate(() => document.documentElement.dataset.theme)) === th && (await settingsVal('theme')) === th);
@@ -420,12 +517,12 @@ try {
   await reload();
   const on = await page.evaluate(() => getComputedStyle(document.querySelector('.page')).animationName);
   ok('對照組：沒開「減少動態效果」時有動畫', on === 'page-in', on);
-  await nav(() => hold(3300));
+  await nav(() => hold(HOLD));
   await nav(() => page.click('[data-motion="off"]'));
   await nav(() => page.click('[data-act="exit"]'));
   const off = await page.evaluate(() => ({ attr: document.documentElement.dataset.motion, page: getComputedStyle(document.querySelector('.page')).animationName }));
   ok('設定裡關掉動畫：整個 App 都不動', off.attr === 'off' && off.page === 'none', JSON.stringify(off));
-  await nav(() => hold(3300));
+  await nav(() => hold(HOLD));
   await nav(() => page.click('[data-motion="auto"]'));
   await nav(() => page.click('[data-act="exit"]'));
 
@@ -450,7 +547,7 @@ try {
   ok('找回後：「上次匯出」＝備份的時間、沒有未匯出的變更', (await settingsVal('changeSeq')) === 0 && !!(await settingsVal('lastBackupAt')));
 
   // ---- 11. 手機上已有資料時找回：一定要先存一份目前的 ----
-  await nav(() => hold(3300));
+  await nav(() => hold(HOLD));
   await nav(() => clickText('a', '從備份找回'));
   await (await page.$('input[type=file]')).uploadFile(bpath);
   await page.waitForFunction(() => document.body.textContent.includes('備份檔完整'), { timeout: 15000 });
@@ -466,6 +563,8 @@ try {
   ok('走過的每個畫面都沒有「晚輩」「家人」', seenWords.size === 0, [...seenWords].join('、'));
   const backAsPrimary = await page.evaluate(() => window.__backPrimary || []);
   ok('走過的每一頁：「回收租表／回上一頁／回設定」都不是主按鈕', backAsPrimary.length === 0, [...new Set(backAsPrimary)].join('；'));
+  const emoji = await page.evaluate(() => window.__emoji);
+  ok('走過的每個畫面都沒有 emoji 字元（圖示都是跟著文字顏色的 SVG）', emoji.length === 0, [...new Set(emoji)].slice(0, 5).join('；'));
   const garbage = await page.evaluate(() => window.__garbage);
   ok('走過的每個畫面都沒有出現 null／undefined／NaN（含畫完後才補上的內容）', garbage.length === 0, [...new Set(garbage)].slice(0, 5).join('；'));
   ok('全程沒有 JavaScript 錯誤', errors.length === 0, errors.join(' | '));

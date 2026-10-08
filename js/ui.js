@@ -5,12 +5,52 @@
 // 所以：畫面程式一律用這裡的 add()／fill()（和 h() 用同一個 nodes()），不直接呼叫原生 append／prepend／replaceChildren。
 // scripts/staticcheck.mjs 會擋直接呼叫；端對端測試會擋畫面上出現 null／undefined／NaN。
 
-/** 子元素清單 → 真正要放進去的節點：攤平、略過 null／undefined／false、其他值轉成文字 */
+// 2026-10-08 Yolin（森林主題）：深綠的「✔ 收到了」按鈕上，字是白的、勾卻是深灰黑，幾乎看不見、也沒對齊。
+// 根因：✔ ◀ ▶ 📞 📷 都是「可以當 emoji 的字元」，iPhone 用 Apple 的 emoji 字型畫它們，顏色固定、不跟著文字顏色走——
+// 三套主題、每一顆按鈕都一樣。所以不在個別按鈕上修：所有文字都經過 nodes()，在這裡把這些字元換成 SVG 圖示
+// （線條用 currentColor＝跟文字同色），畫面程式照樣寫「'✔ 收到了'」。
+// scripts/staticcheck.mjs 擋 textContent 直接塞這些字元（繞過 nodes()）；端對端測試擋畫面上出現任何 emoji 字元。
+const ICONS = {
+  '✔': ['M4.5 12.5l5 5L19.5 7', 'stroke'],
+  '◀': ['M16 5L7 12l9 7z', 'fill'],
+  '▶': ['M8 5l9 7-9 7z', 'fill'],
+  '📞': ['M7.2 3.5l2.6 4.2-1.9 2a12 12 0 0 0 6.4 6.4l2-1.9 4.2 2.6-.9 3.4c-.2.7-.9 1.2-1.6 1.1C10.4 20.9 3.1 13.6 2.6 6c0-.7.4-1.4 1.1-1.6z', 'fill'],
+  '📷': ['M4 7.5h3.2L9 5h6l1.8 2.5H20a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1zM12 9.8a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2z', 'stroke'],
+};
+const ICON_RE = new RegExp(`(${Object.keys(ICONS).join('|')})\uFE0F?`, 'u');
+/** 一個跟著文字顏色走的圖示（SVG，大小＝1 個字） */
+export function icon(ch) {
+  const [d, mode] = ICONS[ch];
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'ic');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.dataset.icon = ch;
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', d);
+  if (mode === 'fill') { path.setAttribute('fill', 'currentColor'); } else {
+    path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'currentColor'); path.setAttribute('stroke-width', '3');
+    path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
+  }
+  svg.appendChild(path);
+  return svg;
+}
+/** 一段文字 → 文字節點與圖示（遇到 ✔ ◀ ▶ 📞 📷 換成 SVG） */
+function textNodes(str) {
+  const out = [];
+  for (const [i, part] of str.split(ICON_RE).entries()) {
+    if (i % 2) out.push(icon(part)); else if (part) out.push(document.createTextNode(part));
+  }
+  return out;
+}
+
+/** 子元素清單 → 真正要放進去的節點：攤平、略過 null／undefined／false、其他值轉成文字（圖示字元換成 SVG） */
 export function nodes(kids) {
   const out = [];
   for (const c of kids.flat(Infinity)) {
     if (c == null || c === false) continue;
-    out.push(c.nodeType ? c : document.createTextNode(String(c)));
+    if (c.nodeType) out.push(c); else out.push(...textNodes(String(c)));
   }
   return out;
 }
@@ -72,6 +112,22 @@ export function statusLine(status, payment) {
  * 頁面最下面的返回鍵：每一頁都在同一個位置（最後一顆）、同一個樣式（.btn.back），而且不是主按鈕——
  * 主按鈕留給那一頁真正的動作（2026-10-07 Yolin：已收的頁把「回收租表」做成最醒目的實心按鈕，層級是反的）。
  */
+/**
+ * 地址、門牌 → 一段一段（「中和區｜永和路｜60號｜1樓」），每段是 inline-block：放不下時整段換到下一行，
+ * 數字和單位不會被拆開（2026-10-08 實機看到「中和區永和路60／號1樓」，像壞掉）。
+ * 只有一段本身就比一整行還寬時，才會在段內換行（不裁字、不縮字）。
+ */
+const ADDR_RE = /.+?(?:大道|[縣市區鄉鎮村里路街段巷弄號樓室])(?:之[0-9０-９一二三四五六七八九十]+)?|.+$/gu;
+export function addrChunks(s) { return String(s).match(ADDR_RE) || []; }
+export function addrNodes(s) {
+  const out = [];
+  for (const [i, part] of addrChunks(s).entries()) {
+    if (i) out.push(document.createElement('wbr'));
+    out.push(h('span', { class: 'addr-part' }, part));
+  }
+  return out;
+}
+
 export function backButton(href, label) {
   return h('a', { class: 'btn back', href, 'data-act': 'bottom-back' }, '‹ ', label);
 }

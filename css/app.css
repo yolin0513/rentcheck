@@ -96,6 +96,11 @@ p { margin: .4rem 0; }
 .num { font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: .01em; }
 .ok { color: var(--ok); font-weight: 700; }
 .bad { color: var(--bad); font-weight: 700; }
+/* 圖示（ui.js 的 icon()：✔ ◀ ▶ 📞 📷 換成的 SVG）：大小＝1 個字、顏色＝文字顏色、和字對齊 */
+.ic { display: inline-block; width: 1em; height: 1em; flex: none; vertical-align: -.14em; overflow: visible; }
+.tile-status .ic { margin-top: .15em; }   /* 格子的狀態列是 flex、行高 1.3：圖示對齊第一行字的中間 */
+/* 地址、門牌一段一段（ui.js 的 addrNodes()）：放不下就整段換行，數字和單位不拆開 */
+.addr-part { display: inline-block; }
 .warnbox { background: var(--warn-bg); color: var(--warn-fg); padding: .6rem .8rem; border-radius: 14px; }
 .card { background: var(--surface); border-radius: var(--radius); padding: .8rem .9rem; margin: 0 0 .9rem; box-shadow: var(--shadow); }
 .card h2 { color: var(--brand-ink); }
@@ -171,7 +176,6 @@ html[data-theme="forest"] .tile.st-notyet { border-color: var(--not-bd); }
 .remind { display: block; min-height: 48px; background: var(--warn-bg); color: var(--warn-fg); border: 2px solid var(--accent); border-radius: 16px; padding: .35rem .7rem; margin: 0 0 .6rem; font-size: .85rem; font-weight: 800; text-decoration: none; box-shadow: var(--shadow); }
 /* 收租表最下面固定的一條：匯出備份＋設定（2026-10-07 Yolin）。中間整塊留給房間格；捲到底時最後一列要完整看得到 */
 .grid-page { padding-bottom: calc(var(--footbar-h) + 16px); }
-.last-backup { margin-top: 1rem; }
 .footbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
   padding: 6px 16px calc(6px + var(--safe-bottom));
@@ -182,13 +186,16 @@ html[data-theme="forest"] .tile.st-notyet { border-color: var(--not-bd); }
 .footbar-note { margin: 0 0 6px; font-size: .75rem; color: var(--muted); text-align: center; }
 .footbar-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .footbar .btn, .footbar .hold { margin: 0; min-height: 50px; font-size: .85rem; }
+/* 「匯出備份」按鈕的第二行：上次匯出的日期（2026-10-08 Yolin）。上下留白收小，整條不因為多一行而變高太多 */
+.footbar .btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: .05em .5em; line-height: 1.15; }
+.fb-sub { font-size: .8em; font-weight: 700; }
 .footbar .hold { border: 2px solid var(--line); background: var(--surface-2); color: var(--brand-ink); }
 
 /* 返回：每一頁都在最下面同一個位置、同一個樣式；不是主按鈕（主按鈕留給那一頁真正的動作） */
 .btn.back { background: var(--surface-2); color: var(--brand-ink); border: 2px solid var(--line); box-shadow: none; font-weight: 700; margin-top: 1.1rem; }
 
 /* 電話：詳情頁、稱呼下面；按了直接撥（沒填就不顯示） */
-.phone { display: inline-flex; flex-wrap: wrap; align-items: center; column-gap: .5em; row-gap: 0; max-width: 100%; min-height: 48px; margin: .3rem 0 .1rem; padding: .15em .6em; border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); font-weight: 800; text-decoration: none; border: 2px solid var(--brand-ink); }
+.phone { display: inline-flex; flex-wrap: wrap; align-items: center; column-gap: .35em; row-gap: 0; max-width: 100%; min-height: 48px; margin: 0; padding: .15em .7em; border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); font-weight: 800; text-decoration: none; border: 2px solid var(--brand-ink); }
 .phone .num { white-space: nowrap; }   /* 電話號碼不從中間斷開：放不下就整個號碼換到下一行 */
 
 /* ===== 按鈕：主要＝漸層實心；次要＝白底主色框。按下去縮一點 ===== */
@@ -215,16 +222,31 @@ input[type="month"].field::-webkit-date-and-time-value, input[type="date"].field
 label { display: block; font-size: .9rem; font-weight: 700; color: var(--fg); }
 .hint { display: block; margin-top: -.4rem; margin-bottom: .6rem; font-weight: 500; }
 
-/* 按住 3 秒的按鈕 */
+/* 按住才會觸發的按鈕（設定：1 秒） */
 .hold { position: relative; overflow: hidden; display: block; width: 100%; min-height: 48px; margin: 1rem 0 0; font: inherit; font-size: .8rem; font-weight: 700; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--line); border-radius: 16px; -webkit-touch-callout: none; user-select: none; touch-action: none; }
 .hold-fill { position: absolute; inset: 0; background: var(--brand-soft); transform-origin: left; transform: scaleX(var(--p, 0)); }
 .hold-label { position: relative; }
 
 /* ===== 點進去的頁面 ===== */
 .who { margin: .1rem 0 .2rem; }
-.who-label { font-size: 1.5rem; font-weight: 900; font-family: var(--title-font); }
+.who-label { font-size: 1.5rem; font-weight: 900; font-family: var(--title-font); line-height: 1.25; }
 .who-name { font-size: 1.05rem; font-weight: 600; color: var(--muted); }
+/* 詳情卡（2026-10-08 Yolin：排版不要有換行的異樣感）：三層——誰＋狀態／資料／金額。
+ * 層與層之間同一個間距（.8rem）、一條細線；資料是兩欄（標題｜內容），內容都對齊同一條線 */
+.detail { padding: 1rem 1rem .9rem; }
+.detail > * { margin: 0; }
+.detail > * + * { margin-top: .8rem; }
+.detail-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .4rem .8rem; }
+.detail-head .who { margin: 0; flex: 1 1 8em; min-width: 0; }
+.detail-head .chip { margin: .2rem 0 0; }
+.info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .55rem .9rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.info-row { display: contents; }
+.info dt { align-self: center; font-size: .85rem; font-weight: 700; color: var(--muted); }
+.info dd { align-self: center; margin: 0; font-weight: 700; min-width: 0; }
+.amount-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.amount-k { font-size: .85rem; font-weight: 700; color: var(--muted); }
 .amount { font-size: 1.6rem; font-weight: 900; font-variant-numeric: tabular-nums; margin: .4rem 0 .1rem; }
+.amount-row .amount { margin: 0; line-height: 1.2; }
 .amount small { font-size: .6em; font-weight: 700; margin-left: .15em; }
 .note-box { background: var(--note-bg); color: var(--note-fg); padding: .5rem .7rem; border-radius: 14px; font-weight: 600; }
 .thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin: .4rem 0; }
@@ -276,7 +298,8 @@ label { display: block; font-size: .9rem; font-weight: 700; color: var(--fg); }
 .motion-row { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .motion-row .btn { margin: 0; }
 .theme-swatch { display: inline-block; width: 1.4em; height: 1.4em; border-radius: 50%; vertical-align: -.25em; margin-right: .4em; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .15); }
-.log { padding-left: 1em; font-size: .8rem; }
+.log { padding-left: 1em; font-size: .8rem; margin: .3rem 0; }
+.log-more summary { min-height: 48px; display: flex; align-items: center; font-size: .85rem; font-weight: 700; color: var(--brand-ink); cursor: pointer; }
 .steps { padding-left: 1.4em; }
 .steps li { margin: .3rem 0; }
 .file-label input[type=file] { display: block; width: 100%; font-size: .8rem; margin-top: .3rem; }

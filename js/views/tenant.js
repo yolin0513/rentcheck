@@ -1,7 +1,7 @@
 // 點一格之後：這位租客這個月的頁面。步驟：'' 主頁、'confirm' 確認收款、'note' 記原因。
 
 import * as store from '../store.js';
-import { h, add, fill, topbar, toast, STATUS, statusLine, celebrate, backButton } from '../ui.js';
+import { h, add, fill, topbar, toast, STATUS, statusLine, celebrate, backButton, addrNodes } from '../ui.js';
 import { monthName, money, shortDate, isoDate, dueDayIn, isActive, cellStatus } from '../months.js';
 import { compress } from '../photos.js';
 
@@ -17,10 +17,16 @@ export async function renderTenantPage(ctx, id, ym, step) {
   const s = await store.settings();
   const back = `#/m/${ym}`;
   const self = `#/t/${encodeURIComponent(t.id)}/${ym}`;
-  const who = h('div', { class: 'who' }, h('div', { class: 'who-label' }, t.label), t.name ? h('div', { class: 'who-name' }, t.name) : null);
-  // 電話：門牌、稱呼下面，按了直接撥（2026-10-07 Yolin：發現「還沒收」最自然的下一步就是打電話）。沒填就整塊不顯示
+  const who = h('div', { class: 'who' }, h('div', { class: 'who-label' }, addrNodes(t.label)), t.name ? h('div', { class: 'who-name' }, t.name) : null);
+  // 電話：按了直接撥（2026-10-07 Yolin：「還沒收」最自然的下一步就是打電話）。沒填就整列不顯示
   const digits = String(t.phone || '').replace(/[^\d+]/g, '');
-  const phone = digits.length >= 3 ? h('a', { class: 'phone', href: `tel:${digits}`, 'data-act': 'call' }, '📞 打電話　', h('span', { class: 'num' }, t.phone)) : null;
+  const phone = digits.length >= 3 ? h('a', { class: 'phone', href: `tel:${digits}`, 'data-act': 'call', 'aria-label': `打電話 ${t.phone}` }, '📞 ', h('span', { class: 'num' }, t.phone)) : null;
+  // 2026-10-08 Yolin：點進來要看得到完整的地址和租客資訊，排版不要有換行的異樣感。
+  // 一張卡、三層：誰（門牌大字＋稱呼，右邊是狀態）→ 資料（左欄標題、右欄內容，同一條對齊線）→ 金額。層與層之間同一個間距、一條細線。
+  // 地址用 addrNodes()：放不下時整段換行，「60號」不會被拆成「60／號」。格子名稱就是完整地址時，不重複列一次。
+  const addrRow = t.address && t.address !== t.label ? ['地址', h('span', { class: 'addr' }, addrNodes(t.address))] : null;
+  const info = (...rows) => h('dl', { class: 'info' }, rows.filter(Boolean).map(([k, v]) => h('div', { class: 'info-row' }, h('dt', null, k), h('dd', null, v))));
+  const amountRow = (k, cls, n) => h('div', { class: 'amount-row' }, h('span', { class: 'amount-k' }, k), h('span', { class: `amount ${cls}` }, money(n), h('small', null, '元')));
 
   if (step === 'confirm') return confirmPage(ctx, t, ym, p, self, who);
   if (step === 'note') return notePage(ctx, t, ym, p, self, who, s);
@@ -28,20 +34,21 @@ export async function renderTenantPage(ctx, id, ym, step) {
   const status = cellStatus({ payment: p, ym, dueDay: t.dueDay, today: isoDate() });
   const chip = h('span', { class: `chip ${STATUS[status].cls}` }, statusLine(status, p));
   const page = h('div', { class: 'page tenant-page' }, topbar(`${monthName(ym)}的租金`, back));
+  const head = h('div', { class: 'detail-head' }, who, chip);
   if (p && p.status === 'paid') {
     add(page,
-      h('section', { class: 'card' }, who, phone, chip,
-        h('p', { class: 'amount st-text-paid' }, `已收 ${money(p.amount)}`, h('small', null, '元')),
-        h('p', { class: 'muted' }, `${shortDate(p.paidOn)} 收`),
+      h('section', { class: 'card detail' }, head,
+        info(addrRow, phone ? ['電話', phone] : null, ['收款日', shortDate(p.paidOn)]),
+        amountRow('已收', 'st-text-paid', p.amount),
         photoStrip(ctx, t, ym, p)),
       // 已收的頁沒有主要動作：「改回沒收到」用次要樣式，返回在最下面
       h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.markUnpaid(t, ym); ctx.state.justChanged = t.id; ctx.go(back); } }, '改回「沒收到」'),
       backButton(back, '回收租表'));
   } else {
     add(page,
-      h('section', { class: 'card' }, who, phone, chip,
-        h('p', { class: 'amount' }, money(t.rent), h('small', null, '元')),
-        h('p', { class: 'muted' }, `每月 ${dueDayIn(ym, t.dueDay)} 號繳`),
+      h('section', { class: 'card detail' }, head,
+        info(addrRow, phone ? ['電話', phone] : null, ['繳租日', `每月 ${dueDayIn(ym, t.dueDay)} 號`]),
+        amountRow('月租', '', t.rent),
         p && p.note ? h('p', { class: 'note-box' }, `還沒收的原因：${p.note}`) : null,
         p && p.photoIds && p.photoIds.length ? photoStrip(ctx, t, ym, p) : null),
       h('a', { class: 'btn primary', href: `${self}/confirm` }, '✔ 收到了'),
@@ -81,7 +88,7 @@ function confirmPage(ctx, t, ym, p, self, who) {
       const out = await compress(f);
       pending.photoIds.push(await store.savePhoto(out));
     } catch (e) { toast(e.message || '照片存不起來'); }
-    photoBtn.disabled = false; photoBtn.textContent = '📷 再拍一張（可不拍）';
+    photoBtn.disabled = false; fill(photoBtn, '📷 再拍一張（可不拍）');
     fileIn.value = '';
     drawThumbs();
   });

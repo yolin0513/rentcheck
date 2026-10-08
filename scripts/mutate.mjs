@@ -1,6 +1,6 @@
 // 突變驗證：把程式故意改壞一處，確認「該抓到的那一條檢查」真的會紅；改壞的是暫存副本，不碰原檔。
 // 每一條都先確認改壞的那段原文確實存在（不存在＝情境沒成立，判紅，不當作通過）。
-// 用法：node scripts/mutate.mjs        （約 28 × 35 秒）
+// 用法：node scripts/mutate.mjs        （約 46 × 40 秒）
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,9 +28,9 @@ const MUTANTS = [
     test: 'e2e', expect: '對照組：按了取消 → 不算匯出', why: '取消分享也算匯出' },
   { file: 'js/app.js', from: 'export function isStandalone() {', to: 'export function isStandalone() { if (navigator.userAgent) {}',
     test: 'staticcheck', expect: 'App 程式沒有依賴瀏覽器識別字串或 iOS 版本號', why: '加了看瀏覽器識別字串的程式' },
-  { file: 'js/views/grid.js', from: "holdButton('設定（按住 3 秒）'", to: "holdButton('晚輩設定（按住 3 秒）'",
+  { file: 'js/views/grid.js', from: "holdButton('設定', SETTINGS_HOLD_MS", to: "holdButton('晚輩設定', SETTINGS_HOLD_MS",
     test: 'staticcheck', expect: '畫面文字沒有「晚輩」「家人」', why: '畫面上又出現「晚輩」' },
-  { file: 'js/views/grid.js', from: "holdButton('設定（按住 3 秒）'", to: "holdButton('晚' + '輩設定（按住 3 秒）'",
+  { file: 'js/views/grid.js', from: "holdButton('設定', SETTINGS_HOLD_MS", to: "holdButton('晚' + '輩設定', SETTINGS_HOLD_MS",
     test: 'e2e', expect: '走過的每個畫面都沒有「晚輩」「家人」', why: '畫面上又出現「晚輩」（拆字躲過靜態檢查）' },
   { file: 'js/views/backupview.js', from: "show('cancelled',", to: "show('shared',",
     test: 'e2e', expect: '取消：明確寫「沒有匯出」，和成功分得出來', why: '取消時顯示成成功的樣子' },
@@ -69,11 +69,44 @@ const MUTANTS = [
   { file: 'css/app.css', from: '  margin: 0 -16px 10px; padding: calc(var(--safe-top) + 14px) 16px 8px;', to: '  margin: 0 -16px 10px; padding: 4px 16px 8px;',
     test: 'e2e', expect: '頁首的月份離狀態列至少 10 點', why: '頁首沒留狀態列的空間（黏在一起）' },
   { file: 'js/views/tenant.js', from: "  const phone = digits.length >= 3 ? h('a',", to: "  const phone = true ? h('a',",
-    test: 'e2e', expect: '沒填電話的租客：不顯示電話那一塊', why: '沒填電話也顯示電話那一塊' },
+    test: 'e2e', expect: '沒填電話的租客：不顯示電話那一列', why: '沒填電話也顯示電話那一列' },
   { file: 'css/app.css', from: '.phone .num { white-space: nowrap; }', to: '.phone .num { }',
     test: 'e2e', expect: '電話號碼不從中間斷開', why: '電話號碼可以從中間斷行（實際截圖看到的 0900-000- ／ 111）' },
-  { file: 'css/app.css', from: 'max-width: 100%; min-height: 48px; margin: .3rem 0 .1rem; padding: .15em .6em;', to: 'min-height: 48px; margin: .3rem 0 .1rem; padding: 0 .9em;',
+  { file: 'css/app.css', from: 'max-width: 100%; min-height: 48px; margin: 0; padding: .15em .7em;', to: 'min-height: 48px; margin: 0; padding: 0 .9em;',
     test: 'e2e', expect: '電話鍵在卡片裡面', why: '電話鍵在最窄＋最大字時凸出卡片（量出來的 6 點）' },
+  // ---- v0.7.0（2026-10-08 Yolin 試用 v0.6.0 的七項） ----
+  { file: 'js/views/grid.js', from: "h('a', { href: `#/m/${cur}`, class: 'linkbtn', 'data-act': 'this-month' }", to: "h('a', { href: '#/', class: 'linkbtn', 'data-act': 'this-month' }",
+    test: 'e2e', expect: '按「回到本月」：真的回到這個月', why: '「回到本月」改回連到 #/（實機按了沒反應的那個寫法）' },
+  { file: 'js/views/grid.js', from: 'export const SETTINGS_HOLD_MS = 1000;', to: 'export const SETTINGS_HOLD_MS = 3000;',
+    test: 'e2e', expect: '按住 1 秒：進入設定', why: '設定改回要按住 3 秒' },
+  { file: 'js/views/grid.js', from: "holdButton('設定', SETTINGS_HOLD_MS", to: "holdButton('設定（按住 1 秒）', SETTINGS_HOLD_MS",
+    test: 'e2e', expect: '設定按鈕只寫「設定」', why: '按鈕上又寫「按住幾秒」' },
+  { file: 'js/ui.js', from: '    if (c.nodeType) out.push(c); else out.push(...textNodes(String(c)));', to: '    out.push(c.nodeType ? c : document.createTextNode(String(c)));',
+    test: 'e2e', expect: '走過的每個畫面都沒有 emoji 字元', why: 'nodes() 不再把 ✔ 換成圖示（實機深綠按鈕上深灰黑的勾）' },
+  { file: 'js/ui.js', from: '    if (c.nodeType) out.push(c); else out.push(...textNodes(String(c)));', to: '    out.push(c.nodeType ? c : document.createTextNode(String(c)));',
+    test: 'e2e', expect: '「收到了」前面的勾：是圖示', why: '同上，看的是「收到了」那一顆' },
+  { file: 'js/views/tenant.js', from: "fill(photoBtn, '📷 再拍一張（可不拍）');", to: "photoBtn.textContent = '📷 再拍一張（可不拍）';",
+    test: 'staticcheck', expect: '沒有用 textContent／innerText 直接放 emoji 字元', why: '用 textContent 繞過 nodes() 放 emoji' },
+  { file: 'css/app.css', from: 'flex: none; vertical-align: -.14em;', to: 'flex: none; vertical-align: -.6em;',
+    test: 'e2e', expect: '「收到了」前面的勾：和字對齊', why: '勾和字沒對齊' },
+  { file: 'css/app.css', from: '.addr-part { display: inline-block; }', to: '.addr-part { }',
+    test: 'e2e', expect: '詳情頁的地址沒有把數字和單位拆開', why: '地址一段一段不再整段換行（實機的「60／號1樓」）' },
+  { file: 'js/ui.js', from: '大道|[縣市區鄉鎮村里路街段巷弄號樓室]', to: '大道|[縣市區鄉鎮村里路街段巷弄樓室]',
+    test: 'unittest', expect: '地址分段：中和區｜永和路｜60號｜1樓', why: '地址分段不認得「號」' },
+  { file: 'css/app.css', from: '.detail > * + * { margin-top: .8rem; }', to: '.detail > * + * { margin-top: .8rem; } .detail > .amount-row { margin-top: .3rem; }',
+    test: 'e2e', expect: '三層間距一樣', why: '詳情卡的間距不一致' },
+  { file: 'css/app.css', from: '.info-row { display: contents; }', to: '.info-row { display: flex; gap: .9rem; grid-column: 1 / -1; }',
+    test: 'e2e', expect: '資料對齊同一條線', why: '資料欄沒對齊（每列各排各的）' },
+  { file: 'js/views/grid.js', from: "h('span', { class: 'fb-sub', 'data-last-backup': '' }, last)", to: 'null',
+    test: 'e2e', expect: '「匯出備份」按鈕的第二行', why: '按鈕裡沒有上次匯出的日期' },
+  { file: 'js/views/settings.js', from: 'const LOG_SHOWN = 3;', to: 'const LOG_SHOWN = 30;',
+    test: 'e2e', expect: '異動紀錄：只列最近 3 筆', why: '異動紀錄又一次列 30 筆' },
+  { file: 'js/views/settings.js', from: "    persisted === true ? null : row('保留資料',", to: "    row('已用空間', '1.2 MB'), persisted === true ? null : row('保留資料',",
+    test: 'e2e', expect: '資料安全不顯示技術細節', why: '資料安全又出現技術細節' },
+  { file: 'js/views/settings.js', from: '  // ---- 1. 租客 ----', to: "  add(page, section('資料安全'));",
+    test: 'e2e', expect: '設定頁：「租客」在最上面', why: '租客不在設定的最上面' },
+  { file: 'scripts/staticcheck.mjs', from: String.raw`t.replace(/(^|\s)\/\*[\s\S]*?\*\//g, '$1')`, to: String.raw`t.replace(/\/\*[\s\S]*?\*\//g, '')`,
+    test: 'staticcheck', expect: '字串裡的「image/*」不會被當成註解開頭', why: '靜態檢查的去註解改回舊寫法（把 tenant.js 約 50 行當成註解）' },
 ];
 
 function copyTree(src, dst) {

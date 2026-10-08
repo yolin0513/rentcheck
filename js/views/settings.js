@@ -1,10 +1,10 @@
-// 設定（畫面上不寫「晚輩」——通常由家人協助，但不指定是誰）。進入要按住 3 秒；App 切到背景或 3 分鐘沒動作就自動離開。
+// 設定（畫面上不寫「晚輩」——通常由家人協助，但不指定是誰）。進入要按住 1 秒（收租表最下面的「設定」）；App 切到背景或 3 分鐘沒動作就自動離開。
 // 這裡沒有「刪除租客」：只有「搬走」（可搬回）。收款狀態也不在這裡改——那是長輩在收租表做的事。
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h, add, fill, fmtMB, daysAgo, toast, backButton } from '../ui.js';
-import { ymOf, addMonths, autoLabels } from '../months.js';
+import { h, add, fill, daysAgo, toast, backButton } from '../ui.js';
+import { ymOf, addMonths, autoLabels, shortDate, isoDate } from '../months.js';
 import { loadMonth, buildHeader, buildTiles, buildReminder, buildFootbar } from './grid.js';
 import { tryPersist } from './tenant.js';
 
@@ -49,38 +49,9 @@ export async function renderSettings(ctx) {
   const [s, list, c] = await Promise.all([store.settings(), store.tenants(), store.counts()]);
   const page = h('div', { class: 'page settings' }, topbar(ctx, ''));
 
-  // ---- 1. 資料安全：手機裡的紀錄只是副本，正本是最近一次傳出去的備份 ----
-  let persisted = null;
-  try { persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null; } catch {}
-  let est = null;
-  try { est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null; } catch {}
-  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  const ago = daysAgo(s.lastBackupAt);
-  const lossText = !s.lastBackupAt
-    ? (c.tenants ? '全部的紀錄（還沒有匯出過）' : '沒有東西會損失')
-    : s.unsent > 0 ? `上次匯出（${ago} 天前）之後的 ${s.unsent} 筆變更` : '不會損失（上次匯出之後沒有改過）';
-  add(page, section('資料安全',
-    h('p', { class: 'muted' }, '紀錄只存在這支 iPhone 的 App 裡，而且被清掉時不會有任何提示。所以 App 裡這份只是「副本」；正本是最近一次匯出、存在 App 以外（例如「檔案」或 iCloud）的備份檔。'),
-    row('如果現在被清掉，會損失', lossText, s.unsent > 0 || !s.lastBackupAt ? 'warn' : 'ok'),
-    row('上次匯出備份', s.lastBackupAt ? `${new Date(s.lastBackupAt).toLocaleString('zh-TW', { hour12: false })}（${ago} 天前，${fmtMB(s.lastBackupBytes)}${s.lastBackupHow === 'restored' ? '，從備份找回' : ''}）` : '還沒有'),
-    row('還沒匯出的變更', `${s.unsent} 筆` + (s.lastChangeAt ? `（最後一筆：${new Date(s.lastChangeAt).toLocaleString('zh-TW', { hour12: false })}）` : '')),
-    row('開啟方式', standalone ? '✔ 主畫面 App' : '✘ 瀏覽器分頁（預覽）——資料可能被清掉', standalone ? 'ok' : 'bad'),
-    row('持久儲存', persisted === true ? '✔ iPhone 已答應保留這裡的資料（刪掉圖示、清除 Safari 資料時是否保留，尚未實測）'
-      : persisted === false ? '✘ iPhone 沒有答應；空間不足時可能被清' : '？ 這支手機讀不到', persisted ? 'ok' : 'bad'),
-    s.persist ? row('上次請求持久儲存', `${new Date(s.persist.at).toLocaleString('zh-TW', { hour12: false })}，結果 ${s.persist.result}`) : null,
-    row('已用空間', est ? fmtMB(est.usage || 0) : '讀不到'),
-    row('租客／紀錄／照片', `${c.tenants} 位／${c.payments} 筆／${c.photos} 張`),
-    persisted === true ? null : h('button', { type: 'button', class: 'btn secondary', onclick: async () => {
-      let r = '不支援';
-      try { r = navigator.storage && navigator.storage.persist ? String(await navigator.storage.persist()) : '不支援'; } catch (e) { r = '錯誤 ' + e.name; }
-      await store.setMeta('persist', { at: new Date().toISOString(), result: r });
-      ctx.render();
-    } }, '請求持久儲存'),
-    h('a', { class: 'btn', href: '#/backup' }, '現在匯出備份'),
-    h('a', { class: 'btn secondary', href: '#/restore' }, '從備份找回'),
-    h('p', { class: 'muted' }, '匯出的檔案存在 App 以外的地方，App 的資料被清掉時它還在。每一份都是完整的，只要留最新的一份。傳到聊天軟體的檔案可能過一陣子就不能下載，最好另外存一份。')));
+  // 2026-10-08 Yolin：「租客」放最上面（進設定最常做的事）；資料安全、異動紀錄精簡——留下看得懂、需要知道的，技術細節拿掉。
 
-  // ---- 2. 租客 ----
+  // ---- 1. 租客 ----
   const cur = ymOf();
   add(page, section('租客',
     list.length ? h('ol', { class: 'tenant-list' }, list.map((t, i) => h('li', { class: t.endMonth && t.endMonth < cur ? 'moved' : '' },
@@ -92,6 +63,33 @@ export async function renderSettings(ctx) {
         h('button', { type: 'button', class: 'mini', 'aria-label': '往後', disabled: i === list.length - 1, onclick: async () => { await store.moveTenant(t.id, 1); ctx.render(); } }, '↓'))))) : h('p', { class: 'muted' }, '還沒有租客。'),
     h('a', { class: 'btn', href: '#/settings/tenant/new', 'data-act': 'add-tenant' }, '＋ 新增租客'),
     list.length > 1 ? h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.resortByAddress(); ctx.render(); } }, '依門牌重新排序') : null));
+
+  // ---- 2. 資料安全：手機裡的紀錄只是副本，正本是最近一次匯出的備份 ----
+  let persisted = null;
+  try { persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null; } catch {}
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const ago = daysAgo(s.lastBackupAt);
+  const lossText = !s.lastBackupAt
+    ? (c.tenants ? '全部的紀錄（還沒有匯出過）' : '沒有東西會損失')
+    : s.unsent > 0 ? `${s.unsent} 筆變更（上次匯出之後改的）` : '不會損失';
+  const safety = section('資料安全',
+    h('p', { class: 'muted' }, '紀錄只存在這支手機裡，被清掉時不會有提示。匯出的備份檔才是正本。'),
+    row('如果現在被清掉，會損失', lossText, s.unsent > 0 || !s.lastBackupAt ? 'warn' : 'ok'),
+    row('上次匯出備份', s.lastBackupAt ? `${shortDate(isoDate(new Date(s.lastBackupAt)))}（${ago} 天前）` : '還沒有'),
+    // 下面兩項只在「有問題」時才出現（沒問題時使用者不需要知道）
+    standalone ? null : row('開啟方式', '✘ 瀏覽器分頁——資料可能被清掉', 'bad'),
+    persisted === true ? null : row('保留資料', persisted === false ? '✘ iPhone 還沒答應保留' : '這支手機讀不到', 'bad'),
+    persisted === true ? null : h('button', { type: 'button', class: 'btn secondary', onclick: async () => {
+      let r = '不支援';
+      try { r = navigator.storage && navigator.storage.persist ? String(await navigator.storage.persist()) : '不支援'; } catch (e) { r = '錯誤 ' + e.name; }
+      await store.setMeta('persist', { at: new Date().toISOString(), result: r });
+      ctx.render();
+    } }, '請 iPhone 保留資料'),
+    h('a', { class: 'btn', href: '#/backup' }, '現在匯出備份'),
+    h('a', { class: 'btn secondary', href: '#/restore' }, '從備份找回'),
+    h('p', { class: 'muted' }, '每一份備份都是完整的，留最新的一份就好。傳到聊天軟體的檔案可能會過期，最好另存一份。'));
+  safety.dataset.section = 'safety';
+  add(page, safety);
 
   // ---- 3. 字的大小 ----
   const fitBox = h('div', { class: 'fit', role: 'status' }, '量測中…');
@@ -117,7 +115,7 @@ export async function renderSettings(ctx) {
     });
   } else fitBox.textContent = '還沒有租客，新增之後才量得出來。';
 
-  // ---- 3b. 外觀與動畫 ----
+  // ---- 4. 外觀與動畫 ----
   add(page, section('外觀',
     h('div', { class: 'theme-row' }, THEMES.map(([k, label, color]) => h('button', {
       type: 'button', class: 'btn ' + (s.theme === k ? '' : 'secondary'), 'aria-pressed': String(s.theme === k), dataset: { theme: k },
@@ -130,7 +128,7 @@ export async function renderSettings(ctx) {
       }, label)))),
     h('p', { class: 'muted' }, 'iPhone「設定 → 輔助使用 → 動態效果 → 減少動態效果」打開時，App 也不會有動畫。')));
 
-  // ---- 4. 其他 ----
+  // ---- 4b. 還沒收的原因 ----
   const notes = h('textarea', { class: 'field', rows: '3', 'aria-label': '還沒收的原因選項' });
   notes.value = s.noteOptions.join('\n');
   add(page, section('還沒收的原因',
@@ -140,13 +138,19 @@ export async function renderSettings(ctx) {
       toast('存好了');
     } }, '存起來')));
 
-  // ---- 5. 異動紀錄 ----
+  // ---- 5. 異動紀錄：只列最近 3 筆，更早的收起來（要看再點開） ----
+  const LOG_SHOWN = 3;
   const log = await store.recentLog(30);
-  add(page, section('異動紀錄（最近 30 筆）',
-    log.length ? h('ul', { class: 'log' }, log.map((e) => h('li', null, h('span', { class: 'muted' }, new Date(e.at).toLocaleString('zh-TW', { hour12: false }) + '　'), e.text))) : h('p', { class: 'muted' }, '還沒有。'),
-    h('p', { class: 'muted' }, `版本 ${ctx.version}`)));
+  const when = (iso) => { const d = new Date(iso); return `${shortDate(isoDate(d))} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const item = (e) => h('li', null, h('span', { class: 'muted' }, `${when(e.at)}　`), e.text);
+  const logSec = section('異動紀錄',
+    log.length ? h('ul', { class: 'log' }, log.slice(0, LOG_SHOWN).map(item)) : h('p', { class: 'muted' }, '還沒有。'),
+    log.length > LOG_SHOWN ? h('details', { class: 'log-more' }, h('summary', null, `看更早的 ${log.length - LOG_SHOWN} 筆`), h('ul', { class: 'log' }, log.slice(LOG_SHOWN).map(item))) : null);
+  logSec.dataset.section = 'log';
+  add(page, logSec);
 
-  add(page, h('button', { type: 'button', class: 'btn', onclick: () => ctx.exitEdit() }, '離開設定'));
+  add(page, h('button', { type: 'button', class: 'btn', onclick: () => ctx.exitEdit() }, '離開設定'),
+    h('p', { class: 'muted center' }, `版本 ${ctx.version}`));
   return page;
 }
 

@@ -2,7 +2,7 @@
 
 import { naturalCompare, autoLabels, cellStatus, addMonths, daysInMonth, dueDayIn, isActive, monthName } from '../js/months.js';
 import { buildPayload, renderBackupHtml, extractPayload, verifyPayload, contentHash } from '../js/backupcore.js';
-import { statusLine, NOTE_MAX_ON_TILE } from '../js/ui.js';
+import { statusLine, NOTE_MAX_ON_TILE, addrChunks } from '../js/ui.js';
 
 let fail = 0;
 const ok = (name, cond, extra = '') => { console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!cond) fail++; };
@@ -56,6 +56,16 @@ ok('任何長度的原因都不會變成半句', ['說晚點給', '聯絡不到'
 const oldTile = (n) => Array.from(n).slice(0, 3).join('');   // 舊版的寫法
 ok('對照組：同一個判斷，套在舊版「前三個字」上會判成半句（說晚點給、聯絡不到）', isHalf(oldTile('說晚點給'), '說晚點給') && isHalf(oldTile('聯絡不到'), '聯絡不到'));
 ok(`門檻是 ${NOTE_MAX_ON_TILE} 個字：剛好 ${NOTE_MAX_ON_TILE} 個字整句顯示、多一個字就改標記`, statusLine('note', { note: '一二三四五六' }) === '！ 一二三四五六' && statusLine('note', { note: '一二三四五六七' }) === '！ 看原因');
+
+// ---- 地址分段：數字和單位不拆開（2026-10-08 實機：「中和區永和路60／號1樓」） ----
+ok('地址分段：中和區｜永和路｜60號｜1樓', addrChunks('中和區永和路60號1樓').join('|') === '中和區|永和路|60號|1樓', addrChunks('中和區永和路60號1樓').join('|'));
+ok('地址分段：「3樓之1」是一段', addrChunks('中山路12號3樓之1').join('|') === '中山路|12號|3樓之1', addrChunks('中山路12號3樓之1').join('|'));
+ok('地址分段：沒有單位的門牌（D9-a）整個一段', addrChunks('D9-a').join('|') === 'D9-a');
+const ADDRS = ['中和區永和路60號1樓', '溫泉路123號2樓', '新北市中和區中正路100巷5弄3號4樓之2', '台北市市民大道一段1號', 'D9-a', '10樓', '中山路12號'];
+// 不變式：分段接回去＝原文；任何一段都不會以數字結尾、下一段卻以單位開頭（＝數字和單位被拆開）
+const splitsNumber = (parts) => parts.some((x, i) => i > 0 && /[0-9０-９]$/.test(parts[i - 1]) && /^[號樓巷弄段之室]/.test(x));
+ok('地址分段：接回去等於原文，數字和單位從不分開', ADDRS.every((a) => addrChunks(a).join('') === a && !splitsNumber(addrChunks(a))));
+ok('對照組：「…60｜號1樓」這種切法會被判成拆開', splitsNumber(['中和區永和路60', '號1樓']));
 
 // ---- 備份 ----
 const tenants = [

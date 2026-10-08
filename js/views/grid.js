@@ -1,7 +1,7 @@
 // 主畫面：一個月 × 所有租客，2 欄 × 5 列的房間格。位置固定、照門牌排，不依狀態移動。
 
 import * as store from '../store.js';
-import { h, add, holdButton, statusLine, STATUS, toast } from '../ui.js';
+import { h, add, holdButton, statusLine, STATUS, toast, addrNodes } from '../ui.js';
 import { ymOf, isoDate, addMonths, monthName, yearOf, isActive, cellStatus, shortDate } from '../months.js';
 
 export const REMIND_DAYS = 30;        // 距上次傳出超過幾天，就在格子上方提醒
@@ -22,7 +22,7 @@ export async function loadMonth(ym) {
 export function buildTiles(cells, ym, justChanged = null) {
   return h('div', { class: 'grid', role: 'list' }, cells.map(({ t, p, status }) =>
     h('a', { class: `tile ${STATUS[status].cls}${t.id === justChanged ? ' just-changed' : ''}`, href: `#/t/${encodeURIComponent(t.id)}/${ym}`, role: 'listitem', dataset: { status, tenant: t.id } },
-      h('span', { class: 'tile-label' }, t.label),
+      h('span', { class: 'tile-label' }, addrNodes(t.label)),
       t.name ? h('span', { class: 'tile-name' }, t.name) : null,   // 2026-10-07 Yolin：門牌下面加稱呼
       h('span', { class: 'tile-status' }, statusLine(status, p)))));
 }
@@ -32,7 +32,9 @@ export function buildHeader(ym, cells) {
   const paid = cells.filter((c) => c.status === 'paid').length;
   const left = cells.length - paid;
   const summary = ym !== cur
-    ? h('div', { class: 'summary other' }, `這是 ${monthName(ym)}的紀錄　`, h('a', { href: '#/', class: 'linkbtn' }, '回到本月'))
+    // 「回到本月」要明確指向本月：#/ 這個路由沿用「目前看的月份」（從詳情頁、設定回來時要停在原來那個月），
+    // 2026-10-08 Yolin 實機：連到 #/ 按了沒反應——一直停在原來那個月
+    ? h('div', { class: 'summary other' }, `這是 ${monthName(ym)}的紀錄　`, h('a', { href: `#/m/${cur}`, class: 'linkbtn', 'data-act': 'this-month' }, '回到本月'))
     : h('div', { class: 'summary' }, left === 0 && cells.length ? '這個月全部收齊了 ✔'
       : ['已收 ', h('span', { class: 'num' }, String(paid)), ' 戶　還有 ', h('span', { class: 'num' }, String(left)), ' 戶']);
   const pct = cells.length ? Math.round((paid / cells.length) * 100) : 0;
@@ -74,8 +76,7 @@ export async function renderGrid(ctx) {
   add(page,
     buildHeader(ym, cells),
     needsReminder(s) ? buildReminder(s) : null,
-    cells.length ? buildTiles(cells, ym, takeJustChanged(ctx)) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'),
-    h('p', { class: 'muted center last-backup' }, s.lastBackupAt ? `上次匯出備份：${shortDate(isoDate(new Date(s.lastBackupAt)))}` : '還沒有匯出過備份'));
+    cells.length ? buildTiles(cells, ym, takeJustChanged(ctx)) : h('p', { class: 'muted center' }, '這個月沒有在租的租客。'));
   const bar = buildFootbar(s, ctx);
   // 底部那一條的高度隨字級改變：量到多高，房間格下面就留多高（捲到底時最後一列要完整看得到）
   if (typeof ResizeObserver === 'function') {
@@ -85,13 +86,17 @@ export async function renderGrid(ctx) {
   return h('div', { class: 'grid-screen' }, page, bar);
 }
 
-/** 收租表最下面固定的一條：「匯出備份」＋「設定（按住 3 秒）」（2026-10-07 Yolin）。越矮越好——它蓋在房間格上面 */
+/** 進設定要按住多久。2026-10-08 Yolin：3 秒太久、按鈕上的「（按住 3 秒）」拿掉；1 秒仍比單擊長很多，防誤觸的目的還在 */
+export const SETTINGS_HOLD_MS = 1000;
+
+/** 收租表最下面固定的一條：「匯出備份（第二行：上次匯出的日期）」＋「設定」。越矮越好——它蓋在房間格上面 */
 export function buildFootbar(s, ctx) {
+  const last = s.lastBackupAt ? `上次 ${shortDate(isoDate(new Date(s.lastBackupAt)))}` : '還沒匯出過';
   return h('footer', { class: 'footbar', 'data-footbar': '' },
     h('div', { class: 'footbar-inner' },
       h('div', { class: 'footbar-row' },
-        h('a', { class: 'btn secondary', href: '#/backup', 'data-act': 'foot-backup' }, '匯出備份'),
-        holdButton('設定（按住 3 秒）', 3000, () => ctx && ctx.enterEdit(), () => toast('要按住 3 秒才會打開設定')))));
+        h('a', { class: 'btn secondary', href: '#/backup', 'data-act': 'foot-backup' }, h('span', { class: 'fb-main' }, '匯出備份'), h('span', { class: 'fb-sub', 'data-last-backup': '' }, last)),
+        holdButton('設定', SETTINGS_HOLD_MS, () => ctx && ctx.enterEdit(), () => toast('按住不放，才會打開設定')))));
 }
 
 function emptyState(ctx) {

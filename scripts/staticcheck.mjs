@@ -20,6 +20,12 @@ function walk(dir) {
   });
 }
 
+// 去掉註解，只檢查程式本身。區塊註解的「/*」前面要是行首或空白：2026-10-08 突變抓到，舊寫法把 tenant.js 的
+// accept: 'image/*' 當成註解開頭，一路吃到下一個「*/」——整個確認頁（約 50 行）所有靜態檢查都看不到。
+const stripComments = (t) => t.replace(/(^|\s)\/\*[\s\S]*?\*\//g, '$1').replace(/(^|[^:])\/\/.*$/gm, '$1');
+ok('對照組：字串裡的「image/*」不會被當成註解開頭', stripComments("h('input', { accept: 'image/*' });\nel.append(x);\n/** 說明 */\n").includes('el.append(x)')
+  && !stripComments('/** 說明 el.append(x) */ y();').includes('append'));
+
 // ---- 1. 不看瀏覽器識別字串、不看 iOS 版本 ----
 const FORBIDDEN = [/userAgent/, /navigator\.platform/, /appVersion/, /iPhone OS/, /Version\//, /\bOS \d+_\d+/];
 const hits = (text) => FORBIDDEN.filter((re) => re.test(text)).map(String);
@@ -28,7 +34,7 @@ ok('對照組：乾淨的程式不命中', hits('if (matchMedia("(display-mode: 
 const appFiles = [path.join(ROOT, 'index.html'), path.join(ROOT, 'sw.js'), ...walk(path.join(ROOT, 'js'))];
 const bad = appFiles.flatMap((f) => {
   // 註解裡提到這些字（解釋為什麼不用）不算；只檢查去掉註解後的程式
-  const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/<!--[\s\S]*?-->/g, '');
+  const code = stripComments(fs.readFileSync(f, 'utf8')).replace(/<!--[\s\S]*?-->/g, '');
   return hits(code).map((h) => `${path.relative(ROOT, f)}: ${h}`);
 });
 ok('App 程式沒有依賴瀏覽器識別字串或 iOS 版本號', bad.length === 0, bad.join('; '));
@@ -38,7 +44,7 @@ const WORDS = [/晚輩/, /家人/];
 const wordHits = (code) => WORDS.filter((re) => re.test(code)).map(String);
 ok('對照組：檢查器抓得到畫面文字裡的「晚輩」', wordHits("h('button', null, '晚輩設定')").length === 1);
 const badWords = appFiles.flatMap((f) => {
-  const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/<!--[\s\S]*?-->/g, '');
+  const code = stripComments(fs.readFileSync(f, 'utf8')).replace(/<!--[\s\S]*?-->/g, '');
   return wordHits(code).map((h) => `${path.relative(ROOT, f)}: ${h}`);
 });
 ok('畫面文字沒有「晚輩」「家人」', badWords.length === 0, badWords.join('; '));
@@ -49,10 +55,21 @@ const NATIVE = /\.(append|prepend|replaceChildren)\(|\.innerHTML\s*=/;
 ok('對照組：檢查器抓得到 page.append(…)', NATIVE.test("page.append(h('p'), null);") && NATIVE.test("el.innerHTML = '<b>x</b>';"));
 ok('對照組：add(page, …) 不命中', !NATIVE.test("add(page, h('p'), null);"));
 const nativeHits = appFiles.filter((f) => !f.endsWith(path.join('js', 'ui.js'))).flatMap((f) => {
-  const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/<!--[\s\S]*?-->/g, '');
+  const code = stripComments(fs.readFileSync(f, 'utf8')).replace(/<!--[\s\S]*?-->/g, '');
   return code.split('\n').map((l, i) => (NATIVE.test(l) ? `${path.relative(ROOT, f)}:${i + 1}` : null)).filter(Boolean);
 });
 ok('畫面程式沒有直接呼叫原生 append／prepend／replaceChildren／innerHTML（ui.js 以外）', nativeHits.length === 0, nativeHits.join(', '));
+
+// ---- 2b'. emoji 字元不繞過 ui.js 的 nodes() 直接塞進畫面 ----
+// 2026-10-08 實機：✔ 在 iPhone 上用 emoji 字型畫，顏色固定（深綠按鈕上是深灰黑）。nodes() 會把 ✔ ◀ ▶ 📞 📷 換成跟著文字顏色的 SVG；
+// 直接設 textContent／innerText 就繞過了它。（端對端測試另外擋「畫面上出現任何 emoji 字元」。）
+const EMOJI_SET = /\.(textContent|innerText)\s*=.*\p{Extended_Pictographic}/u;
+ok('對照組：檢查器抓得到 btn.textContent = \'📷 再拍一張\'', EMOJI_SET.test("photoBtn.textContent = '📷 再拍一張';") && !EMOJI_SET.test("fill(photoBtn, '📷 再拍一張');"));
+const emojiHits = appFiles.flatMap((f) => {
+  const code = stripComments(fs.readFileSync(f, 'utf8'));
+  return code.split('\n').map((l, i) => (EMOJI_SET.test(l) ? `${path.relative(ROOT, f)}:${i + 1}` : null)).filter(Boolean);
+});
+ok('沒有用 textContent／innerText 直接放 emoji 字元（要經過 nodes() 換成圖示）', emojiHits.length === 0, emojiHits.join(', '));
 
 // ---- 2c. 每一套主題：文字與底色的對比 ≥ 7：1（WCAG AAA）——好看不能換掉看得清楚 ----
 const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8');

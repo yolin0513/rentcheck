@@ -81,7 +81,7 @@ await sheet.setContent(`<html><body style="margin:0;padding:24px;background:#fff
   <style>h1{font-size:32px;margin:0 0 4px}.row{display:grid;grid-template-columns:160px repeat(3,1fr);gap:16px;align-items:start;margin:18px 0}
   .lab{font-weight:800;padding-top:8px}.cell img{width:100%;border-radius:18px;box-shadow:0 2px 10px rgba(0,0,0,.15)}.th{font-size:26px;font-weight:900;text-align:center}
   .frames{display:flex;gap:10px;align-items:flex-end}.frames div{text-align:center;font-size:16px;color:#555}.frames img{height:150px;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.15)}</style>
-  <h1>收租 App 外觀：三選一（v0.6.0）</h1><p style="color:#555;margin:0 0 8px">iPhone 12 的實際畫面大小（含狀態列與底部橫條）。操作完全一樣，只換配色與質感。請挑一個（回覆 A、B 或 C）。三套的文字對比都 ≥ 7：1；動畫每段 ≤ 0.3 秒，iPhone 開「減少動態效果」或設定裡關掉就不動。</p>
+  <h1>收租 App 外觀：三選一（v0.7.0）</h1><p style="color:#555;margin:0 0 8px">iPhone 12 的實際畫面大小（含狀態列與底部橫條）。操作完全一樣，只換配色與質感。請挑一個（回覆 A、B 或 C）。三套的文字對比都 ≥ 7：1；動畫每段 ≤ 0.3 秒，iPhone 開「減少動態效果」或設定裡關掉就不動。</p>
   <div class="row"><div></div>${THEMES.map(([, n]) => `<div class="th">${n}</div>`).join('')}</div>
   ${ROWS.map(([k, label]) => `<div class="row"><div class="lab">${label}</div>${THEMES.map(([th]) => `<div class="cell"><img src="${b64(`${OUT}${th}-${k}.png`)}"></div>`).join('')}</div>`).join('')}
   <h2 style="margin-top:28px">打勾動畫（暖陽，逐格；全長約 0.3 秒）</h2>
