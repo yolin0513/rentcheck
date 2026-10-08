@@ -4,6 +4,11 @@
 
 ## 目前進行中／交接
 
+- **v0.7.3 第一次推送被閘門擋下（2026-10-08）**：STATUS 寫進了一行本機磁碟路徑（共用慣例主檔的位置），個資掃描照規則擋。那兩筆 commit 從沒推出去，Dispatch 核准改寫（規則要先問的是改寫**已推送**的歷史）：退回重 commit，路徑改成「統籌工作區」。同一次還把 STATUS 寫成「v0.7.3 已部署」而實際沒推——見 CLAUDE.md 規則 13、14。
+
+- **【最新】v0.7.3（部署中，Dispatch 核准；Yolin 已回報長按設定不會選取、版面目前沒問題，等長輩實際用、調好字級後再回報）**：Dispatch 決定關掉 iPhone 的電話號碼自動偵測（畫面上滿是門牌、金額、日期，任何一串被認成電話，點了就跳撥號）。`index.html` 加 `format-detection: telephone=no`；**只關自動偵測**，詳情頁電話那一欄是自己寫的 `tel:` 連結，照樣能撥。staticcheck 兩條（有這個設定、tel: 連結還在）＋突變 2 條（58 條）。
+- 規則 12 與已知清單整理成共用慣例提案：`docs/共用慣例提案_平台行為.md`（標明所有平台／iPhone／Safari）。共用慣例主檔在統籌工作區，**不由本專案改**，Dispatch 另外安排。
+
 - **【最新】v0.7.2：長按「設定」叫出 iPhone 的「書寫工具」**（Yolin 說明：左上角那顆圓形半透明按鈕不是一直在，是長按「設定」之後跳出來、過一陣子消失）。**v0.7.1 的第三項診斷作廢**：不是系統元件佔住左上角、也不是輔助觸控（我上一輪的推測），頁首版面不動。
   - 根因：我們要求長按，iPhone 把長按一段文字當成選取。`.hold` 和 `.tile` 其實寫了 `user-select: none`，但**只寫了不帶前綴的那一種——iPhone 的 Safari 只認 `-webkit-user-select`**，所以在手機上等於沒寫；Chromium 兩種都認，測試與截圖都看不出來。
   - 修法：一條共用規則，讓「按的東西」（`[data-longpress]` 及其內容、button、.btn、房間格、上下月、返回、↑↓、租客清單列）全部 `-webkit-user-select: none; user-select: none; -webkit-touch-callout: none`。電話號碼刻意不關（長按複製號碼有用）。`holdButton` 掛 `data-longpress`。

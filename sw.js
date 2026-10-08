@@ -5,7 +5,7 @@
  *
  * 每次改動任何 SHELL 檔案都要 bump VERSION，並同步 js/version.js（scripts/staticcheck.mjs 會比對）。
  */
-const VERSION = 'rentcheck-v0.7.2';
+const VERSION = 'rentcheck-v0.7.3';
 const SHELL = `${VERSION}-shell`;
 
 const SHELL_ASSETS = [

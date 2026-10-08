@@ -137,6 +137,11 @@ ok('對照組：新的 pointerdown 處理會被抓到', PRESS.test("tile.addEven
 ok('按住／拖曳的處理只在審查過的地方（新加的要掛 data-longpress 並加進 REVIEWED）', pressHits.length === 0, pressHits.join(', '));
 ok('holdButton 掛了 data-longpress', /class: 'hold', 'data-longpress': ''/.test(fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8')));
 
+// ---- 2f. 不讓 iPhone 自動把數字串認成電話（畫面上滿是門牌、金額、日期）；真正的撥號只靠自己寫的 tel: 連結 ----
+const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+ok('index.html 關掉電話號碼自動偵測（format-detection: telephone=no）', /<meta\s+name="format-detection"\s+content="[^"]*telephone=no[^"]*">/.test(indexHtml));
+ok('電話那一欄仍是自己寫的 tel: 連結（只關自動偵測，不關撥號）', /href: `tel:\$\{digits\}`/.test(fs.readFileSync(path.join(ROOT, 'js', 'views', 'tenant.js'), 'utf8')));
+
 // ---- 3. Service Worker 預快取清單與版本 ----
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const listed = new Set([...sw.matchAll(/'\.\/([^']*)'/g)].map((m) => m[1]).filter(Boolean));

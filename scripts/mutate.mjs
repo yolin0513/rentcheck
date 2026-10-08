@@ -1,6 +1,6 @@
 // 突變驗證：把程式故意改壞一處，確認「該抓到的那一條檢查」真的會紅；改壞的是暫存副本，不碰原檔。
 // 每一條都先確認改壞的那段原文確實存在（不存在＝情境沒成立，判紅，不當作通過）。
-// 用法：node scripts/mutate.mjs        （約 56 × 40 秒）
+// 用法：node scripts/mutate.mjs        （約 58 × 40 秒）
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -129,6 +129,11 @@ const MUTANTS = [
     test: 'staticcheck', expect: 'holdButton 掛了 data-longpress', why: '長按元件沒掛 data-longpress' },
   { file: 'js/views/grid.js', from: "export function buildTiles(cells, ym, justChanged = null) {", to: "export function buildTiles(cells, ym, justChanged = null) { addEventListener('touchstart', () => {});",
     test: 'staticcheck', expect: '按住／拖曳的處理只在審查過的地方', why: '新加了沒審查過的 touchstart 處理' },
+  // ---- v0.7.3（2026-10-08 Dispatch：關掉 iPhone 的電話號碼自動偵測） ----
+  { file: 'index.html', from: '<meta name="format-detection" content="telephone=no">', to: '',
+    test: 'staticcheck', expect: 'index.html 關掉電話號碼自動偵測', why: '拿掉 format-detection（數字串會被 iPhone 認成電話）' },
+  { file: 'js/views/tenant.js', from: "href: `tel:${digits}`", to: "href: `#`",
+    test: 'staticcheck', expect: '電話那一欄仍是自己寫的 tel: 連結', why: '連自己要的撥號也一起關掉' },
 ];
 
 function copyTree(src, dst) {
