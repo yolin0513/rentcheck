@@ -139,7 +139,8 @@ export function backButton(href, label) {
 export function holdButton(label, ms, onDone, onShort) {
   const fillEl = h('span', { class: 'hold-fill', 'aria-hidden': 'true' });
   const text = h('span', { class: 'hold-label' }, label);
-  const btn = h('button', { type: 'button', class: 'hold' }, fillEl, text);
+  // data-longpress：CSS 靠它關掉文字選取與長按選單（iPhone 長按文字會叫出選取／書寫工具）；staticcheck 與端對端都會查
+  const btn = h('button', { type: 'button', class: 'hold', 'data-longpress': '' }, fillEl, text);
   let timer = null, start = 0, raf = 0;
   const reset = () => {
     clearTimeout(timer); timer = null; cancelAnimationFrame(raf);

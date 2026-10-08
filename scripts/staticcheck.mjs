@@ -114,6 +114,29 @@ ok(`所有動畫（${animDecls.length} 處）時間＋延遲都 ≤ 300ms`, tooL
 ok('有「減少動態效果」的規則，並且把動畫全部關掉', /@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none !important; transition: none !important;/.test(css));
 ok('設定裡「關掉動畫」也把動畫全部關掉', /html\[data-motion="off"\] \*[^{]*\{ animation: none !important; transition: none !important; \}/.test(css));
 
+// ---- 2e. 長按：iPhone 會把「長按一段文字」當成選取，叫出選取選單／書寫工具（2026-10-08 Yolin 實機，長按「設定」）----
+// 電腦的瀏覽器沒有這個行為，端對端測不到；改成靜態檢查三件事：
+//   (1) 寫了 user-select: none 的地方，一定也要寫 -webkit-user-select: none（iPhone 的 Safari 只認帶前綴的；之前就是只寫了一種）
+//   (2) 有一條規則同時涵蓋 [data-longpress]，而且三個宣告都在（-webkit-user-select、user-select、-webkit-touch-callout）
+//   (3) 會「按住一段時間才動作」的程式（pointerdown／touchstart）只能在已審查過的地方，而且長按元件要掛 data-longpress
+const cssBlocks = (text) => [...stripComments(text).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+const UNPREFIXED = /(^|[;\s])user-select\s*:\s*none/;
+const PREFIXED = /-webkit-user-select\s*:\s*none/;
+const CALLOUT = /-webkit-touch-callout\s*:\s*none/;
+const halfSelect = (text) => cssBlocks(text).filter((b) => UNPREFIXED.test(b.body) !== PREFIXED.test(b.body)).map((b) => b.sel.replace(/\s+/g, ' ').slice(0, 40));
+ok('對照組：只寫 user-select: none（沒有 -webkit-）會被抓到', halfSelect('.hold { user-select: none; }').length === 1 && halfSelect('.hold { -webkit-user-select: none; user-select: none; }').length === 0);
+const half = halfSelect(css);
+ok('寫了 user-select: none 的地方都同時寫了 -webkit-user-select: none（iPhone 只認帶前綴的）', half.length === 0, half.join('、'));
+const lp = cssBlocks(css).filter((b) => b.sel.split(',').map((x) => x.trim()).includes('[data-longpress]'));
+ok('[data-longpress]（要按住的元件）關掉文字選取與長按選單：-webkit-user-select、user-select、-webkit-touch-callout 三個都有',
+  lp.some((b) => UNPREFIXED.test(b.body) && PREFIXED.test(b.body) && CALLOUT.test(b.body)), lp.map((b) => b.sel.slice(0, 30)).join('；') || '沒有這條規則');
+const PRESS = /addEventListener\(\s*['"](pointerdown|touchstart|mousedown)['"]/;
+const REVIEWED = [/addEventListener\('pointerdown', bumpEdit, true\)/, /btn\.addEventListener\('pointerdown', \(e\) => \{/];   // app.js：任何點擊都延長設定的時間；ui.js：holdButton
+const pressHits = appFiles.flatMap((f) => stripComments(fs.readFileSync(f, 'utf8')).split('\n').map((l, i) => (PRESS.test(l) && !REVIEWED.some((re) => re.test(l)) ? `${path.relative(ROOT, f)}:${i + 1}` : null)).filter(Boolean));
+ok('對照組：新的 pointerdown 處理會被抓到', PRESS.test("tile.addEventListener('pointerdown', start);") && !REVIEWED.some((re) => re.test("tile.addEventListener('pointerdown', start);")));
+ok('按住／拖曳的處理只在審查過的地方（新加的要掛 data-longpress 並加進 REVIEWED）', pressHits.length === 0, pressHits.join(', '));
+ok('holdButton 掛了 data-longpress', /class: 'hold', 'data-longpress': ''/.test(fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8')));
+
 // ---- 3. Service Worker 預快取清單與版本 ----
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const listed = new Set([...sw.matchAll(/'\.\/([^']*)'/g)].map((m) => m[1]).filter(Boolean));

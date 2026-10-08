@@ -1,6 +1,6 @@
 // 突變驗證：把程式故意改壞一處，確認「該抓到的那一條檢查」真的會紅；改壞的是暫存副本，不碰原檔。
 // 每一條都先確認改壞的那段原文確實存在（不存在＝情境沒成立，判紅，不當作通過）。
-// 用法：node scripts/mutate.mjs        （約 51 × 40 秒）
+// 用法：node scripts/mutate.mjs        （約 56 × 40 秒）
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -118,6 +118,17 @@ const MUTANTS = [
     test: 'e2e', expect: '租客清單：平常不顯示 ↑↓', why: '↑↓ 一直顯示（把長地址擠成兩行）' },
   { file: 'css/app.css', from: '.tl-addr::after { content: ""; position: absolute; inset: 0; }', to: '',
     test: 'e2e', expect: '租客清單：整列都可以點', why: '只有地址那幾個字可以點' },
+  // ---- v0.7.2（2026-10-08 Yolin 實機：長按「設定」叫出書寫工具） ----
+  { file: 'css/app.css', from: '  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;\n}', to: '  user-select: none; -webkit-touch-callout: none;\n}',
+    test: 'staticcheck', expect: '都同時寫了 -webkit-user-select: none', why: '只寫不帶前綴的 user-select（iPhone 不認；實機那個錯）' },
+  { file: 'css/app.css', from: '[data-longpress], [data-longpress] *, button,', to: 'button,',
+    test: 'staticcheck', expect: '[data-longpress]（要按住的元件）關掉文字選取', why: '要按住的元件沒有關掉文字選取' },
+  { file: 'css/app.css', from: '[data-longpress], [data-longpress] *, button, .btn, .tile, .tile *,', to: '.btn,',
+    test: 'e2e', expect: '要按住的「設定」與房間格：文字不能被選取', why: '「設定」與房間格都沒關掉文字選取（看實際算出來的樣式）' },
+  { file: 'js/ui.js', from: "class: 'hold', 'data-longpress': ''", to: "class: 'hold'",
+    test: 'staticcheck', expect: 'holdButton 掛了 data-longpress', why: '長按元件沒掛 data-longpress' },
+  { file: 'js/views/grid.js', from: "export function buildTiles(cells, ym, justChanged = null) {", to: "export function buildTiles(cells, ym, justChanged = null) { addEventListener('touchstart', () => {});",
+    test: 'staticcheck', expect: '按住／拖曳的處理只在審查過的地方', why: '新加了沒審查過的 touchstart 處理' },
 ];
 
 function copyTree(src, dst) {

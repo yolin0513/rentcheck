@@ -209,6 +209,13 @@ try {
   ok('10/7：5 號繳的「該收了」、20 號繳的「還沒到」', t.filter((x) => x.status === 'due').length === 5 && t.filter((x) => x.status === 'notyet').length === 5);
 
   // ---- 4. 按住 1 秒才進得去設定（2026-10-08 Yolin：從 3 秒縮短，按鈕上只寫「設定」） ----
+  // 長按會被 iPhone 當成選取文字、叫出書寫工具（2026-10-08 實機）。Chromium 沒有那個行為，只能查「選取有沒有被關掉」：
+  // 要按住的元件（和它裡面的每一個字）、每一格房間格都不能被選取（-webkit- 前綴有沒有寫由 staticcheck 查）
+  const sel = await page.evaluate(() => {
+    const els = [...document.querySelectorAll('[data-longpress], [data-longpress] *, .tile, .tile *')];
+    return { n: document.querySelectorAll('[data-longpress]').length, bad: els.filter((e) => getComputedStyle(e).userSelect !== 'none').map((e) => e.className || e.tagName).slice(0, 5) };
+  });
+  ok('要按住的「設定」與房間格：文字不能被選取（長按不會變成選字）', sel.n === 1 && sel.bad.length === 0, JSON.stringify(sel));
   ok('設定按鈕只寫「設定」（不寫「按住幾秒」）', (await text('.footbar .hold')).trim() === '設定', await text('.footbar .hold'));
   await hold(400);
   await new Promise((r) => setTimeout(r, 300));

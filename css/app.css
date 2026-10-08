@@ -75,6 +75,13 @@ html[data-font="xlarge"] { font-size: 26px; }
 html[data-font="xxlarge"] { font-size: 30px; }
 
 * { box-sizing: border-box; }
+/* 按的東西不能被選成文字、不能叫出長按選單（2026-10-08 Yolin 實機：長按「設定」跳出 iPhone 的「書寫工具」）。
+ * 根因：之前只寫了不帶前綴的 user-select——iPhone 的 Safari 只認 -webkit-user-select，那一行在手機上等於沒寫；
+ * 電腦的 Chromium 兩種都認，所以測試、截圖都看不出來。兩種一起寫（staticcheck 會擋只寫一種的）。
+ * [data-longpress]＝要按住才會動作的元件（ui.js 的 holdButton 會掛上）。電話號碼不在這裡：長按複製號碼是有用的 */
+[data-longpress], [data-longpress] *, button, .btn, .tile, .tile *, .navbtn, .backbtn, .linkbtn, .mini, .tl-item {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
 body {
   margin: 0; min-height: 100vh; color: var(--fg);
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%) fixed;
@@ -148,7 +155,7 @@ p { margin: .4rem 0; }
 .tile {
   position: relative; display: flex; flex-direction: column; justify-content: center; gap: 1px;
   min-height: calc(2.6rem + 20px); padding: 7px 10px; border: 2px solid; border-radius: var(--tile-radius);
-  text-decoration: none; -webkit-touch-callout: none; user-select: none; box-shadow: var(--shadow);
+  text-decoration: none; box-shadow: var(--shadow);
   transition: transform 120ms ease-out, box-shadow 120ms ease-out;
 }
 .tile:active { transform: scale(.97); box-shadow: none; }
@@ -225,7 +232,7 @@ label { display: block; font-size: .9rem; font-weight: 700; color: var(--fg); }
 .hint { display: block; margin-top: -.4rem; margin-bottom: .6rem; font-weight: 500; }
 
 /* 按住才會觸發的按鈕（設定：1 秒） */
-.hold { position: relative; overflow: hidden; display: block; width: 100%; min-height: 48px; margin: 1rem 0 0; font: inherit; font-size: .8rem; font-weight: 700; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--line); border-radius: 16px; -webkit-touch-callout: none; user-select: none; touch-action: none; }
+.hold { position: relative; overflow: hidden; display: block; width: 100%; min-height: 48px; margin: 1rem 0 0; font: inherit; font-size: .8rem; font-weight: 700; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--line); border-radius: 16px; touch-action: none; }
 .hold-fill { position: absolute; inset: 0; background: var(--brand-soft); transform-origin: left; transform: scaleX(var(--p, 0)); }
 .hold-label { position: relative; }
 
