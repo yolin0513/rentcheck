@@ -151,11 +151,48 @@ try {
   }
   const listText = await text('.tenant-list');
   ok('設定頁：10 戶依門牌自然排序', ['2樓之1', '2樓之2', '3樓之1', '3樓之2', '4樓之1', '4樓之2', '5樓', '6樓', '7樓', '10樓'].every((l, i, a) => i === 0 || listText.indexOf(a[i - 1]) < listText.indexOf(l)));
-  ok('格子名稱自動去掉共同的「中山路12號」（包含第一戶）', !listText.includes('中山路12號'));
+  // ---- 3b. 設定頁的租客清單（2026-10-08 Yolin：一整串文字流，斷在「王／先生」「5／號」中間、每戶斷點不同） ----
+  const tlMeasure = () => page.evaluate(() => {
+    const lines = (el) => { const r = document.createRange(); r.selectNodeContents(el); return new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size; };
+    const items = [...document.querySelectorAll('.tenant-list .tl-item')];
+    const R = (el) => el.getBoundingClientRect();
+    const broken = items.flatMap((li) => ['.tl-name', '.tl-rent', '.tl-due'].map((s) => li.querySelector(s)).filter((e) => !e || lines(e) > 1).map((e) => (e ? e.textContent : '少了一欄')));
+    const uniq = (f) => new Set(items.map(f).map((x) => Math.round(x))).size;
+    return { n: items.length, broken, heights: uniq((li) => R(li).height), nameL: uniq((li) => R(li.querySelector('.tl-name')).left), rentR: uniq((li) => R(li.querySelector('.tl-rent')).right), dueR: uniq((li) => R(li.querySelector('.tl-due')).right), hs: document.documentElement.scrollWidth <= innerWidth + 1 };
+  });
+  const tlWide = await tlMeasure();
+  ok('設定頁的租客清單（iPhone 12・大字）：稱呼｜月租｜繳款日 每一欄上下對齊、每戶一樣高、沒有一項被拆成兩行',
+    tlWide.n === 10 && tlWide.broken.length === 0 && tlWide.heights === 1 && tlWide.nameL === 1 && tlWide.rentR === 1 && tlWide.dueR === 1 && tlWide.hs, JSON.stringify(tlWide));
+  // ↑↓ 平常收起來（放在地址旁邊會把長地址擠成兩行）；按「調整順序」才出現，而且真的能換順序（之前沒有任何測試按過 ↑↓）
+  ok('租客清單：平常不顯示 ↑↓', (await page.$$('.tl-ord')).length === 0);
+  // 點那一戶的稱呼（不是地址）也要打開那一戶的設定：整列都可以點
+  const hitOk = await page.evaluate(() => { const li = document.querySelectorAll('.tl-item')[1]; const r = li.querySelector('.tl-rent').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!el && el.closest('a') === li.querySelector('.tl-addr'); });
+  ok('租客清單：整列都可以點（點月租那裡也會打開那一戶）', hitOk);
+  const firstAddr = () => page.$eval('.tl-item .tl-addr', (e) => e.textContent);
+  const a0 = await firstAddr();
+  await nav(() => page.click('[data-act="reorder"]'));
+  ok('按「調整順序」：每一戶出現 ↑↓', (await page.$$('.tl-ord')).length === 10);
+  await nav(() => page.click('.tl-item [aria-label="往後"]'));
+  const a1 = await firstAddr();
+  await nav(() => page.$$eval('.tl-item', (els) => els[1].querySelector('[aria-label="往前"]').click()));
+  ok('↓ 把第一戶往後移一格、↑ 再移回來', a1 !== a0 && (await firstAddr()) === a0, `${a0} → ${a1} → ${await firstAddr()}`);
+  await nav(() => page.click('[data-act="reorder"]'));
+  ok('按「順序排好了」：↑↓ 收起來', (await page.$$('.tl-ord')).length === 0);
+  await page.setViewport({ width: 320, height: 626, deviceScaleFactor: 2, isMobile: true });
+  for (const font of ['normal', 'xxlarge']) {
+    await page.evaluate((f) => { document.documentElement.dataset.font = f; }, font);
+    await new Promise((r) => setTimeout(r, 100));
+    const tl = await tlMeasure();
+    ok(`設定頁的租客清單（320 寬・${font}）：每一項都沒被拆成兩行、每戶一樣高、沒有橫向捲動`, tl.broken.length === 0 && tl.heights === 1 && tl.hs, JSON.stringify(tl));
+  }
+  await page.evaluate(() => { document.documentElement.dataset.font = 'large'; });
+  await page.setViewport({ width: 390, height: 763, deviceScaleFactor: 2, isMobile: true });
+  { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }
 
   await nav(() => page.click('[data-act="exit"]'));
   let t = await tiles();
   ok('收租表：10 格', t.length === 10, String(t.length));
+  ok('格子名稱自動去掉共同的「中山路12號」（包含第一戶）', t.every((x) => !x.label.includes('中山路12號')), t.map((x) => x.label).join(','));
   ok('收租表：位置照門牌排', t.map((x) => x.label).join(',') === '2樓之1,2樓之2,3樓之1,3樓之2,4樓之1,4樓之2,5樓,6樓,7樓,10樓', t.map((x) => x.label).join(','));
   ok('剛設定完：還不會出現「匯出備份」提醒', (await page.$('.remind')) === null);
   ok('還沒匯出過：「匯出備份」按鈕的第二行寫「還沒匯出過」', (await page.evaluate(() => { const e = document.querySelector('[data-act="foot-backup"] [data-last-backup]'); return e ? e.textContent : null; })) === '還沒匯出過');
@@ -361,8 +398,9 @@ try {
   // Chromium 的行動模擬在切換視窗大小後會留下頁面縮放（重新載入也清不掉）；直接把縮放設回 1
   { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }
 
-  // ---- 6a. 詳情頁排版（2026-10-08 Yolin：地址被斷成「…永和路60／號1樓」、間距不一致）。最窄＋每一種字級 ----
-  await page.setViewport({ width: 320, height: 626, deviceScaleFactor: 2, isMobile: true });
+  // ---- 6a. 詳情頁排版（2026-10-08 Yolin：地址被斷成「…永和路60／號1樓」、間距不一致；電話膠囊變兩行、號碼貼邊、超出對齊線）。兩種寬度＋每一種字級 ----
+  for (const [vw, vh] of [[390, 763], [320, 626]]) {
+  await page.setViewport({ width: vw, height: vh, deviceScaleFactor: 2, isMobile: true });
   for (const font of ['normal', 'large', 'xlarge', 'xxlarge']) {
     await page.evaluate((f) => { document.documentElement.dataset.font = f; }, font);
     await openTile('3樓之2');
@@ -376,11 +414,20 @@ try {
       const gaps = kids.slice(1).map((k, i) => Math.round(k.getBoundingClientRect().top - kids[i].getBoundingClientRect().bottom));
       // 資料欄的內容都對齊同一條線
       const lefts = new Set([...document.querySelectorAll('.info dd')].map((d) => Math.round(d.getBoundingClientRect().left)));
-      return { parts: parts.length, split, gaps, lefts: lefts.size, hs: document.documentElement.scrollWidth <= innerWidth + 1 };
+      // 電話那一列和其他列同一個節奏：號碼一行、不超出右欄、不是膠囊（沒有框和底色）、和「繳租日」那一列一樣高
+      const a = document.querySelector('a.phone'); const dd = a.closest('dd'); const cs = getComputedStyle(a);
+      const ddOf = (k) => [...document.querySelectorAll('.info dt')].find((x) => x.textContent === k).nextElementSibling;
+      const phone = { lines: lines(a.querySelector('.num')), inCol: a.getBoundingClientRect().right <= dd.getBoundingClientRect().right + 0.5 && dd.getBoundingClientRect().right <= document.querySelector('.detail').getBoundingClientRect().right,
+        pill: cs.borderTopStyle !== 'none' || cs.backgroundColor !== 'rgba(0, 0, 0, 0)', dh: Math.round(dd.getBoundingClientRect().height - ddOf('繳租日').getBoundingClientRect().height), tapH: Math.round(a.getBoundingClientRect().height) };
+      return { parts: parts.length, split, gaps, lefts: lefts.size, phone, hs: document.documentElement.scrollWidth <= innerWidth + 1 };
     });
-    ok(`320 寬・${font}：詳情頁的地址沒有把數字和單位拆開、資料對齊同一條線、三層間距一樣、沒有橫向捲動`,
+    ok(`${vw} 寬・${font}：詳情頁的地址沒有把數字和單位拆開、資料對齊同一條線、三層間距一樣、沒有橫向捲動`,
       L.parts >= 3 && L.split.length === 0 && L.lefts === 1 && L.gaps.length >= 2 && Math.max(...L.gaps) - Math.min(...L.gaps) <= 1 && L.hs, JSON.stringify(L));
+    ok(`${vw} 寬・${font}：電話那一列和其他列同一個節奏（號碼一行、在右欄裡、不是膠囊、和繳租日那列一樣高）`,
+      L.phone.lines === 1 && L.phone.inCol && !L.phone.pill && Math.abs(L.phone.dh) <= 2, JSON.stringify(L.phone));
+    ok(`${vw} 寬・${font}：電話號碼可點的範圍至少 44 點高`, L.phone.tapH >= 44, `${L.phone.tapH}`);
     await nav(() => clickText('a', '回收租表'));
+  }
   }
   // 上面四種字級剛好不一定會斷在「12號」中間：把地址欄從很窄掃到很寬（每 2 點一次），任何寬度都不能把一段拆開
   await page.evaluate(() => { document.documentElement.dataset.font = 'large'; });
@@ -391,11 +438,12 @@ try {
     for (let w = 30; w <= 260; w += 2) {
       info.style.gridTemplateColumns = `max-content ${w}px`;
       for (const p of document.querySelectorAll('.info .addr-part')) if (lines(p) > 1 && p.getBoundingClientRect().width < w - 1) bad.push(`${w}px:${p.textContent}`);
+      const num = document.querySelector('.info a.phone .num'); if (num && lines(num) > 1) bad.push(`${w}px:電話 ${num.textContent}`);
     }
     info.style.gridTemplateColumns = '';
     return bad;
   });
-  ok('任何寬度：詳情頁的地址沒有把數字和單位拆開（地址欄 30～260 點，每 2 點量一次）', sweep.length === 0, sweep.slice(0, 5).join('、'));
+  ok('任何寬度：詳情頁的地址沒有把數字和單位拆開、電話號碼不從中間斷開（資料欄 30～260 點，每 2 點量一次）', sweep.length === 0, sweep.slice(0, 5).join('、'));
   await nav(() => clickText('a', '回收租表'));
   await page.setViewport({ width: 390, height: 763, deviceScaleFactor: 2, isMobile: true });
   { const cdp = await page.createCDPSession(); await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 }); await cdp.detach(); }

@@ -3,7 +3,7 @@
 
 import * as store from '../store.js';
 import * as backup from '../backup.js';
-import { h, add, fill, daysAgo, toast, backButton } from '../ui.js';
+import { h, add, fill, daysAgo, toast, backButton, addrNodes } from '../ui.js';
 import { ymOf, addMonths, autoLabels, shortDate, isoDate } from '../months.js';
 import { loadMonth, buildHeader, buildTiles, buildReminder, buildFootbar } from './grid.js';
 import { tryPersist } from './tenant.js';
@@ -53,15 +53,23 @@ export async function renderSettings(ctx) {
 
   // ---- 1. 租客 ----
   const cur = ymOf();
+  const reorder = !!ctx.state.reorder;
   add(page, section('租客',
-    list.length ? h('ol', { class: 'tenant-list' }, list.map((t, i) => h('li', { class: t.endMonth && t.endMonth < cur ? 'moved' : '' },
-      h('a', { href: `#/settings/tenant/${encodeURIComponent(t.id)}`, class: 'tl-main' },
-        h('b', null, t.label), ` ${t.name || ''}　${Number(t.rent).toLocaleString('en-US')} 元／每月 ${t.dueDay} 號`,
-        t.endMonth ? h('span', { class: 'muted' }, `（${t.endMonth} 起搬走）`) : null),
-      h('span', { class: 'tl-ord' },
+    // 2026-10-08 Yolin：一整串文字自己流，斷在「王／先生」「5／號」中間、每戶斷點都不同。改成結構化：
+    // 第一行地址（整行寬、addrNodes 分段換行）；第二行 稱呼｜月租｜繳款日，三欄和上下每一戶對齊（subgrid）。
+    // ↑↓ 平常收起來（它們固定 102 點寬，放在地址旁邊會把長地址擠成兩行、那一戶就比別戶高）；按「調整順序」才出現。
+    // 畫面太窄（放大字＋顯示縮放）時改成一項一行，每一項本身不斷開。
+    list.length ? h('ol', { class: 'tenant-list' + (reorder ? ' reorder' : '') }, list.map((t, i) => h('li', { class: 'tl-item' + (t.endMonth && t.endMonth < cur ? ' moved' : '') },
+      h('a', { href: `#/settings/tenant/${encodeURIComponent(t.id)}`, class: 'tl-addr' }, addrNodes(t.address || t.label),
+        t.endMonth ? h('span', { class: 'muted tl-moved' }, `（${t.endMonth} 起搬走）`) : null),
+      reorder ? h('span', { class: 'tl-ord' },
         h('button', { type: 'button', class: 'mini', 'aria-label': '往前', disabled: i === 0, onclick: async () => { await store.moveTenant(t.id, -1); ctx.render(); } }, '↑'),
-        h('button', { type: 'button', class: 'mini', 'aria-label': '往後', disabled: i === list.length - 1, onclick: async () => { await store.moveTenant(t.id, 1); ctx.render(); } }, '↓'))))) : h('p', { class: 'muted' }, '還沒有租客。'),
+        h('button', { type: 'button', class: 'mini', 'aria-label': '往後', disabled: i === list.length - 1, onclick: async () => { await store.moveTenant(t.id, 1); ctx.render(); } }, '↓')) : null,
+      h('span', { class: 'tl-name' }, t.name || '（沒填稱呼）'),
+      h('span', { class: 'tl-rent num' }, `${Number(t.rent).toLocaleString('en-US')} 元`),
+      h('span', { class: 'tl-due' }, `每月 ${t.dueDay} 號`)))) : h('p', { class: 'muted' }, '還沒有租客。'),
     h('a', { class: 'btn', href: '#/settings/tenant/new', 'data-act': 'add-tenant' }, '＋ 新增租客'),
+    list.length > 1 ? h('button', { type: 'button', class: 'btn secondary', 'data-act': 'reorder', 'aria-pressed': String(reorder), onclick: () => { ctx.state.reorder = !reorder; ctx.render(); } }, reorder ? '順序排好了' : '調整順序（↑↓）') : null,
     list.length > 1 ? h('button', { type: 'button', class: 'btn secondary', onclick: async () => { await store.resortByAddress(); ctx.render(); } }, '依門牌重新排序') : null));
 
   // ---- 2. 資料安全：手機裡的紀錄只是副本，正本是最近一次匯出的備份 ----

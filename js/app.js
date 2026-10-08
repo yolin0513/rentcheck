@@ -24,6 +24,7 @@ export const state = {
   preview: false,
   standalone: false,
   justChanged: null,   // 剛改過狀態的那一格（回到收租表時彈一下）
+  reorder: false,      // 設定頁的租客清單：是否顯示 ↑↓（離開設定就收起來）
 };
 
 export function isStandalone() {
@@ -42,6 +43,7 @@ export function enterEdit() {
 }
 export function exitEdit() {
   state.edit = false;
+  state.reorder = false;
   clearTimeout(state.editTimer);
   document.body.classList.remove('editing');
   go('#/');

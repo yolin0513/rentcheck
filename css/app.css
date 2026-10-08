@@ -195,7 +195,9 @@ html[data-theme="forest"] .tile.st-notyet { border-color: var(--not-bd); }
 .btn.back { background: var(--surface-2); color: var(--brand-ink); border: 2px solid var(--line); box-shadow: none; font-weight: 700; margin-top: 1.1rem; }
 
 /* 電話：詳情頁、稱呼下面；按了直接撥（沒填就不顯示） */
-.phone { display: inline-flex; flex-wrap: wrap; align-items: center; column-gap: .35em; row-gap: 0; max-width: 100%; min-height: 48px; margin: 0; padding: .15em .7em; border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); font-weight: 800; text-decoration: none; border: 2px solid var(--brand-ink); }
+/* 2026-10-08：不做成膠囊按鈕——和地址、繳租日同一個「標題｜內容」節奏，號碼本身就是連結（主題色＋粗底線）。
+ * inline 元素的上下 padding 不影響排版，只把可點範圍撐到約 48 點 */
+.phone { color: var(--brand-ink); font-weight: 800; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: .2em; padding: max(.2em, calc(24px - .6em)) 0; -webkit-tap-highlight-color: var(--brand-soft); }
 .phone .num { white-space: nowrap; }   /* 電話號碼不從中間斷開：放不下就整個號碼換到下一行 */
 
 /* ===== 按鈕：主要＝漸層實心；次要＝白底主色框。按下去縮一點 ===== */
@@ -239,7 +241,10 @@ label { display: block; font-size: .9rem; font-weight: 700; color: var(--fg); }
 .detail-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .4rem .8rem; }
 .detail-head .who { margin: 0; flex: 1 1 8em; min-width: 0; }
 .detail-head .chip { margin: .2rem 0 0; }
+.detail { container-type: inline-size; }
 .info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .55rem .9rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+/* 卡片太窄（最窄畫面＋最大字）：標題在上、內容在下，內容才有一整行寬——電話號碼不用斷開 */
+@container (max-width: 10.6rem) { .info { grid-template-columns: minmax(0, 1fr); row-gap: .1rem; } .info-row + .info-row dt { margin-top: .45rem; } }
 .info-row { display: contents; }
 .info dt { align-self: center; font-size: .85rem; font-weight: 700; color: var(--muted); }
 .info dd { align-self: center; margin: 0; font-weight: 700; min-width: 0; }
@@ -286,11 +291,27 @@ label { display: block; font-size: .9rem; font-weight: 700; color: var(--fg); }
 .kv .k { color: var(--muted); }
 .kv.ok .v { color: var(--ok); font-weight: 800; }
 .kv.bad .v, .kv.warn .v { color: var(--bad); font-weight: 800; }
-.tenant-list { padding-left: 1.4em; margin: 0; }
-.tenant-list li { padding: .35rem 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
-.tenant-list li.moved { opacity: .55; }
-.tl-main { flex: 1 1 12em; text-decoration: none; font-size: .9rem; }
-.tl-ord { display: flex; gap: 6px; }
+/* 設定頁的租客清單（2026-10-08）：每一戶兩行——地址＋↑↓／稱呼｜月租｜繳款日。三欄用 subgrid 和每一戶對齊 */
+.tenant-list { container-type: inline-size; list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) max-content max-content; column-gap: .8rem; font-size: .9rem; }
+.tl-item { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; row-gap: .15rem; padding: .45rem 0; border-bottom: 1px solid var(--line); }
+.tl-item.moved { opacity: .55; }
+.tl-addr { grid-column: 1 / -1; font-weight: 800; text-decoration: none; color: var(--fg); min-width: 0; }
+.reorder .tl-addr { grid-column: 1 / 3; }
+/* 整列都可以點（打開那一戶的設定）：地址連結的 ::after 蓋滿整列；↑↓ 疊在上面 */
+.tl-item { position: relative; }
+.tl-addr::after { content: ""; position: absolute; inset: 0; }
+.tl-ord { position: relative; z-index: 1; }
+.tl-addr .tl-moved { display: block; font-weight: 600; }
+.tl-ord { grid-column: 3; justify-self: end; display: flex; gap: 6px; }
+.tl-name, .tl-rent, .tl-due { white-space: nowrap; }
+.tl-name { grid-column: 1; overflow-wrap: anywhere; white-space: normal; }
+.tl-rent { grid-column: 2; justify-self: end; font-weight: 700; }
+.tl-due { grid-column: 3; justify-self: end; color: var(--muted); font-weight: 700; }
+/* 太窄放不下三欄：地址一行、↑↓ 一行、三項各占一行（每一項本身不斷開） */
+@container (max-width: 13rem) or (max-width: 300px) {   /* ↑↓ 兩顆固定 102 點寬：用 rem 和 px 兩個門檻 */
+  .tl-item { grid-template-columns: minmax(0, 1fr); }
+  .tl-addr, .reorder .tl-addr, .tl-ord, .tl-name, .tl-rent, .tl-due { grid-column: 1; justify-self: start; }
+}
 .mini { min-width: 48px; min-height: 48px; font: inherit; font-weight: 800; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); color: var(--fg); }
 .font-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .font-row .btn { margin: 0; }

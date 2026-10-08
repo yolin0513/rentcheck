@@ -1,6 +1,6 @@
 // 突變驗證：把程式故意改壞一處，確認「該抓到的那一條檢查」真的會紅；改壞的是暫存副本，不碰原檔。
 // 每一條都先確認改壞的那段原文確實存在（不存在＝情境沒成立，判紅，不當作通過）。
-// 用法：node scripts/mutate.mjs        （約 46 × 40 秒）
+// 用法：node scripts/mutate.mjs        （約 51 × 40 秒）
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -72,8 +72,8 @@ const MUTANTS = [
     test: 'e2e', expect: '沒填電話的租客：不顯示電話那一列', why: '沒填電話也顯示電話那一列' },
   { file: 'css/app.css', from: '.phone .num { white-space: nowrap; }', to: '.phone .num { }',
     test: 'e2e', expect: '電話號碼不從中間斷開', why: '電話號碼可以從中間斷行（實際截圖看到的 0900-000- ／ 111）' },
-  { file: 'css/app.css', from: 'max-width: 100%; min-height: 48px; margin: 0; padding: .15em .7em;', to: 'min-height: 48px; margin: 0; padding: 0 .9em;',
-    test: 'e2e', expect: '電話鍵在卡片裡面', why: '電話鍵在最窄＋最大字時凸出卡片（量出來的 6 點）' },
+  { file: 'css/app.css', from: '.detail { container-type: inline-size; }', to: '.detail { }',
+    test: 'e2e', expect: '電話那一列和其他列同一個節奏', why: '卡片太窄時資料欄不改成上下排（號碼擠在窄的右欄裡、超出卡片）' },
   // ---- v0.7.0（2026-10-08 Yolin 試用 v0.6.0 的七項） ----
   { file: 'js/views/grid.js', from: "h('a', { href: `#/m/${cur}`, class: 'linkbtn', 'data-act': 'this-month' }", to: "h('a', { href: '#/', class: 'linkbtn', 'data-act': 'this-month' }",
     test: 'e2e', expect: '按「回到本月」：真的回到這個月', why: '「回到本月」改回連到 #/（實機按了沒反應的那個寫法）' },
@@ -107,6 +107,17 @@ const MUTANTS = [
     test: 'e2e', expect: '設定頁：「租客」在最上面', why: '租客不在設定的最上面' },
   { file: 'scripts/staticcheck.mjs', from: String.raw`t.replace(/(^|\s)\/\*[\s\S]*?\*\//g, '$1')`, to: String.raw`t.replace(/\/\*[\s\S]*?\*\//g, '')`,
     test: 'staticcheck', expect: '字串裡的「image/*」不會被當成註解開頭', why: '靜態檢查的去註解改回舊寫法（把 tenant.js 約 50 行當成註解）' },
+  // ---- v0.7.1（2026-10-08 Yolin 實機：電話膠囊跑版、設定頁租客清單） ----
+  { file: 'css/app.css', from: '.phone { color: var(--brand-ink); font-weight: 800; text-decoration: underline;', to: '.phone { display: inline-flex; padding: .15em .7em; border: 2px solid var(--brand-ink); border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); font-weight: 800; text-decoration: underline;',
+    test: 'e2e', expect: '電話那一列和其他列同一個節奏', why: '電話改回膠囊按鈕' },
+  { file: 'css/app.css', from: 'padding: max(.2em, calc(24px - .6em)) 0;', to: 'padding: 0;',
+    test: 'e2e', expect: '電話號碼可點的範圍至少 44 點高', why: '電話號碼的可點範圍只有一行字高' },
+  { file: 'css/app.css', from: 'grid-template-columns: subgrid;', to: 'grid-template-columns: minmax(0, 1fr) max-content max-content;',
+    test: 'e2e', expect: '稱呼｜月租｜繳款日 每一欄上下對齊', why: '每一戶各排各的（月租、繳款日不對齊）' },
+  { file: 'js/views/settings.js', from: "      reorder ? h('span', { class: 'tl-ord' },", to: "      true ? h('span', { class: 'tl-ord' },",
+    test: 'e2e', expect: '租客清單：平常不顯示 ↑↓', why: '↑↓ 一直顯示（把長地址擠成兩行）' },
+  { file: 'css/app.css', from: '.tl-addr::after { content: ""; position: absolute; inset: 0; }', to: '',
+    test: 'e2e', expect: '租客清單：整列都可以點', why: '只有地址那幾個字可以點' },
 ];
 
 function copyTree(src, dst) {

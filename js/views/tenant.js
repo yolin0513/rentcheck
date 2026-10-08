@@ -18,9 +18,11 @@ export async function renderTenantPage(ctx, id, ym, step) {
   const back = `#/m/${ym}`;
   const self = `#/t/${encodeURIComponent(t.id)}/${ym}`;
   const who = h('div', { class: 'who' }, h('div', { class: 'who-label' }, addrNodes(t.label)), t.name ? h('div', { class: 'who-name' }, t.name) : null);
-  // 電話：按了直接撥（2026-10-07 Yolin：「還沒收」最自然的下一步就是打電話）。沒填就整列不顯示
+  // 電話：按了直接撥（2026-10-07 Yolin：「還沒收」最自然的下一步就是打電話）。沒填就整列不顯示。
+  // 2026-10-08 Yolin 實機：膠囊按鈕（圖示＋號碼）在窄的右欄裡變兩行、號碼貼邊、超出對齊線。
+  // 改成和其他列一樣「標題｜內容」：內容就是號碼本身，主題色＋底線＝連結；可點範圍用上下 padding 撐到約 48 點（不改變排版）
   const digits = String(t.phone || '').replace(/[^\d+]/g, '');
-  const phone = digits.length >= 3 ? h('a', { class: 'phone', href: `tel:${digits}`, 'data-act': 'call', 'aria-label': `打電話 ${t.phone}` }, '📞 ', h('span', { class: 'num' }, t.phone)) : null;
+  const phone = digits.length >= 3 ? h('a', { class: 'phone', href: `tel:${digits}`, 'data-act': 'call', 'aria-label': `打電話 ${t.phone}` }, h('span', { class: 'num' }, t.phone)) : null;
   // 2026-10-08 Yolin：點進來要看得到完整的地址和租客資訊，排版不要有換行的異樣感。
   // 一張卡、三層：誰（門牌大字＋稱呼，右邊是狀態）→ 資料（左欄標題、右欄內容，同一條對齊線）→ 金額。層與層之間同一個間距、一條細線。
   // 地址用 addrNodes()：放不下時整段換行，「60號」不會被拆成「60／號」。格子名稱就是完整地址時，不重複列一次。
