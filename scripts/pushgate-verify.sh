@@ -154,6 +154,13 @@ fresh base
 probe_commit l "乾淨"
 run_gate; check "14 之後的推送：乾淨" 0 pin "已推送" "擋下"
 
+# 15 搬移一整段程式、乾淨 → 推上去。2026-10-08 v0.7.0 的 settings.js（「租客」整段搬到最上面）：
+#    -U0 的 diff 和預設前後文的 numstat 對齊方式不同（43 對 44 行），舊的自查把它當成「抽取壞了」擋下。用那兩版真實檔案重現
+fresh base
+git -C "$SRC" show a947987:js/views/settings.js > js/views/settings.js && git add js/views/settings.js && git commit -q -m "v0.6.0 的 settings.js" || { echo "15 取不到 a947987 的 settings.js（驗法過期）"; FAIL=1; }
+git -C "$SRC" show c3ca061:js/views/settings.js > js/views/settings.js && git add js/views/settings.js && git commit -q -m "v0.7.0 的 settings.js（搬移一段）" || { echo "15 取不到 c3ca061 的 settings.js（驗法過期）"; FAIL=1; }
+run_gate; check "15 搬移一整段程式：乾淨" 0 pin "已推送" "擋下"
+
 echo "共 $N 種"
 if [ "$FAIL" -ne 0 ]; then rm -f "$SRC/.logs/pushgate-verified.txt"; echo "閘門驗法：有不符合，登記已刪除"; exit 1; fi
 out=""
